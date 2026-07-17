@@ -1,0 +1,240 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-heading);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* Neutres légèrement teintés de vert (teinte ~158) plutôt que gris purs :
+     tout l'écran baigne dans une nuance vert sombre discrète, cohérente avec
+     la couleur de marque. */
+  --background: oklch(0.985 0.006 158);
+  --foreground: oklch(0.29 0.025 158);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.29 0.025 158);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.29 0.025 158);
+  /* Vert forêt sombre : la couleur de marque demandée. */
+  --primary: oklch(0.47 0.1 158);
+  --primary-foreground: oklch(0.985 0.02 158);
+  --secondary: oklch(0.955 0.014 158);
+  --secondary-foreground: oklch(0.35 0.03 158);
+  --muted: oklch(0.965 0.009 158);
+  --muted-foreground: oklch(0.5 0.025 158);
+  --accent: oklch(0.93 0.035 158);
+  --accent-foreground: oklch(0.36 0.08 158);
+  --destructive: oklch(0.6 0.2 18);
+  --destructive-foreground: oklch(0.99 0.005 158);
+  --success: oklch(0.55 0.13 152);
+  --success-foreground: oklch(0.99 0.005 158);
+  --warning: oklch(0.72 0.15 75);
+  --warning-foreground: oklch(0.28 0.04 75);
+  --border: oklch(0.905 0.012 158);
+  --input: oklch(0.902 0.013 158);
+  --ring: oklch(0.47 0.1 158);
+  --chart-1: oklch(0.47 0.1 158);
+  --chart-2: oklch(0.6 0.13 200);
+  --chart-3: oklch(0.62 0.13 130);
+  --chart-4: oklch(0.72 0.15 75);
+  --chart-5: oklch(0.6 0.2 18);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.97 0.011 158);
+  --sidebar-foreground: oklch(0.29 0.025 158);
+  --sidebar-primary: oklch(0.47 0.1 158);
+  --sidebar-primary-foreground: oklch(0.985 0.02 158);
+  --sidebar-accent: oklch(0.92 0.038 158);
+  --sidebar-accent-foreground: oklch(0.34 0.08 158);
+  --sidebar-border: oklch(0.9 0.014 158);
+  --sidebar-ring: oklch(0.47 0.1 158);
+
+  /* Couleurs par moteur : reconnaissance visuelle immédiate dans la liste. */
+  --engine-postgres: oklch(0.55 0.13 250);
+  --engine-mysql: oklch(0.64 0.14 55);
+  --engine-sqlite: oklch(0.58 0.12 210);
+  --engine-mongodb: oklch(0.6 0.14 150);
+}
+
+.dark {
+  --background: oklch(0.19 0.018 158);
+  --foreground: oklch(0.95 0.008 158);
+  --card: oklch(0.23 0.02 158);
+  --card-foreground: oklch(0.95 0.008 158);
+  --popover: oklch(0.23 0.02 158);
+  --popover-foreground: oklch(0.95 0.008 158);
+  --primary: oklch(0.66 0.13 156);
+  --primary-foreground: oklch(0.17 0.03 158);
+  --secondary: oklch(0.28 0.022 158);
+  --secondary-foreground: oklch(0.95 0.008 158);
+  --muted: oklch(0.27 0.02 158);
+  --muted-foreground: oklch(0.71 0.022 158);
+  --accent: oklch(0.33 0.05 158);
+  --accent-foreground: oklch(0.92 0.04 158);
+  --destructive: oklch(0.68 0.18 20);
+  --destructive-foreground: oklch(0.99 0.005 158);
+  --success: oklch(0.72 0.15 152);
+  --success-foreground: oklch(0.17 0.03 158);
+  --warning: oklch(0.79 0.14 78);
+  --warning-foreground: oklch(0.24 0.04 75);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 13%);
+  --ring: oklch(0.66 0.13 156);
+  --chart-1: oklch(0.66 0.13 156);
+  --chart-2: oklch(0.68 0.12 200);
+  --chart-3: oklch(0.7 0.14 130);
+  --chart-4: oklch(0.79 0.14 78);
+  --chart-5: oklch(0.68 0.18 20);
+  --sidebar: oklch(0.17 0.016 158);
+  --sidebar-foreground: oklch(0.95 0.008 158);
+  --sidebar-primary: oklch(0.66 0.13 156);
+  --sidebar-primary-foreground: oklch(0.17 0.03 158);
+  --sidebar-accent: oklch(0.31 0.045 158);
+  --sidebar-accent-foreground: oklch(0.92 0.04 158);
+  --sidebar-border: oklch(1 0 0 / 9%);
+  --sidebar-ring: oklch(0.66 0.13 156);
+
+  --engine-postgres: oklch(0.7 0.13 250);
+  --engine-mysql: oklch(0.76 0.14 65);
+  --engine-sqlite: oklch(0.72 0.12 210);
+  --engine-mongodb: oklch(0.72 0.15 152);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+@layer utilities {
+  /* Ombre douce et diffuse, teintée d'indigo — pas le noir dur par défaut. */
+  .shadow-soft {
+    box-shadow:
+      0 1px 2px oklch(0.4 0.05 285 / 0.04),
+      0 4px 16px oklch(0.4 0.05 285 / 0.06);
+  }
+  .shadow-soft-lg {
+    box-shadow:
+      0 2px 4px oklch(0.4 0.05 285 / 0.05),
+      0 12px 32px oklch(0.4 0.05 285 / 0.1);
+  }
+
+  /* Barre de progression indéterminée : un segment qui balaie la piste tant que
+     le dump tourne (les outils n'émettent pas de pourcentage fiable). */
+  @keyframes indeterminate-bar {
+    0% {
+      left: -40%;
+      width: 40%;
+    }
+    50% {
+      width: 55%;
+    }
+    100% {
+      left: 100%;
+      width: 40%;
+    }
+  }
+  .animate-indeterminate {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    animation: indeterminate-bar 1.15s ease-in-out infinite;
+  }
+
+  /* Animations d'accueil de la landing — désactivées si l'utilisateur préfère
+     réduire les animations (le contenu reste alors visible et statique). */
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes dbd-fade-up {
+      from {
+        opacity: 0;
+        transform: translateY(18px);
+      }
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+    @keyframes dbd-glow {
+      0%,
+      100% {
+        opacity: 0.85;
+      }
+      50% {
+        opacity: 0.45;
+      }
+    }
+    /* Révélé au défilement (une classe .in est ajoutée par IntersectionObserver). */
+    .reveal {
+      opacity: 0;
+      transform: translateY(22px);
+      transition:
+        opacity 0.6s ease,
+        transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+      will-change: opacity, transform;
+    }
+    .reveal.in {
+      opacity: 1;
+      transform: none;
+    }
+    /* Apparition à l'ouverture (hero), avec délai échelonné en style inline. */
+    .anim-fade-up {
+      animation: dbd-fade-up 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    }
+    .glow-pulse {
+      animation: dbd-glow 6s ease-in-out infinite;
+    }
+  }
+}

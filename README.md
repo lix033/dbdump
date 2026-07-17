@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DBDump
 
-## Getting Started
+Sauvegarde de bases PostgreSQL, MySQL/MariaDB, SQLite et MongoDB depuis une app
+de bureau. Aucun serveur à installer, aucune donnée envoyée ailleurs.
 
-First, run the development server:
+## Deux projets distincts
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+dbdump/
+├── frontend/   Next.js + Tailwind + shadcn/ui — tout l'écran
+└── desktop/    Tauri (Rust) — tout ce qui touche au système
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Ce ne sont pas des workspaces : chaque dossier a son `package.json` et
+s'installe séparément. La règle pour savoir où chercher :
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Ce que vous cherchez | Où |
+| --- | --- |
+| Un écran, un formulaire, un bouton | `frontend/src/` |
+| L'exécution de `pg_dump` & co. | `desktop/src/commands.rs` |
+| Les arguments passés aux outils | `desktop/src/engines.rs` |
+| Mots de passe, chiffrement | `desktop/src/secrets.rs`, `desktop/src/store.rs` |
+| Fenêtre, permissions | `desktop/tauri.conf.json`, `desktop/capabilities/` |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Démarrer
 
-## Learn More
+Prérequis : Node 20+, Rust (`rustup`), et les outils du moteur visé
+(`pg_dump`, `mysqldump`, `sqlite3`, `mongodump`) — l'app dit lesquels manquent.
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+# une fois
+npm --prefix frontend install
+npm --prefix desktop install
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# l'app complète (lance le frontend tout seul)
+npm --prefix desktop run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Le frontend tourne sur le port **1420**.
 
-## Deploy on Vercel
+### Travailler sur l'UI sans Rust
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm --prefix frontend run dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Ouvert dans un navigateur, le frontend bascule sur un backend simulé
+(`frontend/src/lib/backend/mock.ts`) : les écrans sont pilotables, y compris les
+cas d'erreur, mais aucun vrai dump n'est produit. Un badge « navigateur » le
+rappelle dans la barre latérale.
+
+## Comment les deux moitiés se parlent
+
+`frontend/src/lib/backend/` définit un contrat TypeScript (`Backend`) avec deux
+implémentations : `tauri.ts` (les vraies commandes) et `mock.ts` (le navigateur).
+`getBackend()` choisit selon l'environnement. **Aucun composant React n'appelle
+`invoke()` directement** — ça garde l'UI testable hors de Tauri.
+
+Le frontend envoie des **options structurées**, jamais une commande. C'est
+`desktop/src/engines.rs` qui construit l'argv réellement exécuté ; laisser
+l'écran dicter la ligne de commande ouvrirait une injection pour rien.
+`frontend/src/lib/dump-command.ts` en est un miroir **d'affichage seulement**
+(l'aperçu copiable dans l'UI) : les deux doivent rester alignés.
+
+## Sécurité
+
+Les mots de passe des bases vont dans le trousseau système, jamais sur le
+disque de l'app — le type `Connection` n'a même pas de champ `password`, donc on
+ne peut pas le sérialiser par accident. Ils sont passés aux outils par variable
+d'environnement (`PGPASSWORD`, `MYSQL_PWD`) ou sur stdin (`mongodump`), jamais en
+argument : l'argv est lisible dans `ps` par tout utilisateur de la machine.
+
+Le fichier des connexions (`connections.enc`) est chiffré en AES-256-GCM avec une
+clé maître elle-même rangée dans le trousseau.
+
+## Tests
+
+```bash
+npm --prefix desktop run test   # cargo test
+```
+
+Ils verrouillent surtout l'invariant ci-dessus : aucun mot de passe dans l'argv.

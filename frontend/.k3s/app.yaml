@@ -1,0 +1,32 @@
+#DEPLOYMENT YAML
+name: dbdump-frontend
+stack: nextjs
+port: 3097
+healthPath: /
+
+expose:
+  prod:
+    mode: nodeport
+    domain: dbdump.nameksociety.com
+  staging:
+    mode: ingress
+    domain: dbdump.staging.nameksociety.com
+
+resources:
+  cpu:
+    request: 100m
+    limit: 500m
+  memory:
+    request: 192Mi
+    limit: 512Mi
+
+replicas:
+  prod: 1
+  staging: 1
+
+config:
+  prod:
+    NODE_ENV: production
+    
+  staging:
+    NODE_ENV: production

@@ -1,0 +1,92 @@
+name: Release
+
+# Se déclenche quand vous poussez un tag de version (ex. v0.1.0), ou à la main.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: write # nécessaire pour créer la Release et y attacher les binaires
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest # macOS Apple Silicon (arm64)
+            args: "--target aarch64-apple-darwin"
+            rust-targets: "aarch64-apple-darwin"
+          - platform: macos-latest # macOS Intel (x86-64)
+            args: "--target x86_64-apple-darwin"
+            rust-targets: "x86_64-apple-darwin"
+          - platform: ubuntu-22.04 # Linux (.AppImage, .deb, .rpm)
+            args: ""
+            rust-targets: ""
+          - platform: windows-latest # Windows (.msi, .exe)
+            args: ""
+            rust-targets: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "desktop -> target"
+
+      # Dépendances système de Tauri sur Linux.
+      - name: Dépendances Linux
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            libssl-dev
+
+      # Installe les dépendances du frontend (buildé par beforeBuildCommand de Tauri).
+      - name: Dépendances frontend
+        run: npm --prefix frontend ci
+
+      # Installe la CLI Tauri (devDependency du dossier desktop).
+      - name: Dépendances desktop
+        run: npm --prefix desktop install
+
+      # Construit l'app et publie une Release (brouillon) avec tous les binaires.
+      - name: Build & Release Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # --- Signature macOS (facultatif mais recommandé) : décommentez et
+          # --- renseignez les secrets du dépôt pour éviter l'avertissement Gatekeeper.
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: "DBDump ${{ github.ref_name }}"
+          releaseBody: "Téléchargez l'installeur correspondant à votre système ci-dessous."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

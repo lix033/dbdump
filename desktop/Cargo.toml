@@ -1,0 +1,44 @@
+[package]
+name = "dbdump"
+version = "0.1.0"
+description = "Sauvegardez vos bases PostgreSQL, MySQL, SQLite et MongoDB en local."
+authors = ["dreamercode01"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "dbdump_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.11.3", features = [] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2.7.1"
+tauri-plugin-opener = "2.5.4"
+
+# Exécution des dumps : tokio pour lire stdout/stderr sans bloquer l'UI.
+tokio = { version = "1.53", features = ["process", "io-util", "rt", "macros", "sync"] }
+# Localisation de pg_dump / mysqldump / … dans le PATH.
+which = "8.0"
+# Mots de passe : trousseau système (Keychain, Credential Manager, Secret Service).
+keyring = { version = "4.1", features = ["apple-native-keyring-store", "windows-native-keyring-store", "dbus-secret-service-keyring-store"] }
+# Chiffrement du fichier de connexions au repos.
+aes-gcm = "0.11"
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
+# Octets aléatoires (nonce GCM, clé maître) : API stable, sans suivre rand_core.
+getrandom = "0.4"
+# Compression des sorties de mysqldump / sqlite3, qui ne savent pas la faire.
+flate2 = "1"
+# Téléchargement + extraction de pg_dump portable au 1er lancement (si absent du
+# système), pour éviter à l'utilisateur d'installer PostgreSQL au préalable.
+ureq = "2"
+tar = "0.4"

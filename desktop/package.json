@@ -1,0 +1,15 @@
+{
+  "name": "dbdump-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Coquille Tauri de DBDump : commandes système, trousseau, dumps. Le frontend vit dans ../frontend.",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri",
+    "test": "cargo test"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4"
+  }
+}
