@@ -21,7 +21,7 @@ import { AppleIcon, WindowsIcon, LinuxIcon } from "@/components/os-icons";
 // ── Configuration : remplacez par votre dépôt GitHub "utilisateur/repo". Les
 //    boutons pointent vers vos Releases ; les liens directs par plateforme sont
 //    résolus automatiquement via l'API GitHub dès qu'une release existe.
-const GITHUB_REPO = "dreamercode01/dbdump";
+const GITHUB_REPO = "lix033/dbdump";
 const RELEASES_PAGE = `https://github.com/${GITHUB_REPO}/releases/latest`;
 
 type OsKey = "mac-arm" | "mac-intel" | "windows" | "linux";
@@ -338,14 +338,36 @@ export default function LandingPage() {
                 );
               })}
             </div>
-            <p className="text-muted-foreground mt-7 text-center text-sm">
-              Toutes les versions sont sur la{" "}
-              <a href={RELEASES_PAGE} className="text-primary underline underline-offset-4">
-                page des releases
-              </a>
-              . Sur macOS, au premier lancement : clic droit sur l&apos;app →{" "}
-              <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">Ouvrir</code>.
-            </p>
+            <div className="text-muted-foreground mx-auto mt-7 max-w-2xl space-y-2 text-center text-sm">
+              <p>
+                Toutes les versions sont sur la{" "}
+                <a href={RELEASES_PAGE} className="text-primary underline underline-offset-4">
+                  page des releases
+                </a>
+                .
+              </p>
+              <p>
+                <strong className="text-foreground">macOS</strong> — l&apos;app n&apos;est pas
+                signée par Apple. Si vous voyez «&nbsp;dbdump is damaged&nbsp;», levez la mise en
+                quarantaine (une seule fois) :{" "}
+                <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
+                  xattr -cr /Applications/dbdump.app
+                </code>
+                , puis ouvrez l&apos;app.
+              </p>
+              <p>
+                <strong className="text-foreground">Windows</strong> — SmartScreen peut afficher
+                «&nbsp;Windows a protégé votre ordinateur&nbsp;» : cliquez{" "}
+                <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
+                  Informations complémentaires
+                </code>{" "}
+                →{" "}
+                <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
+                  Exécuter quand même
+                </code>
+                .
+              </p>
+            </div>
           </div>
         </section>
 

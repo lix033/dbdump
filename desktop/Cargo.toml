@@ -1,6 +1,6 @@
 [package]
 name = "dbdump"
-version = "0.1.0"
+version = "0.1.1"
 description = "Sauvegardez vos bases PostgreSQL, MySQL, SQLite et MongoDB en local."
 authors = ["dreamercode01"]
 license = ""

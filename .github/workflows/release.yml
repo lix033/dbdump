@@ -90,7 +90,20 @@ jobs:
           projectPath: desktop
           tagName: ${{ github.ref_name }}
           releaseName: "DBDump ${{ github.ref_name }}"
-          releaseBody: "Téléchargez l'installeur correspondant à votre système ci-dessous."
-          releaseDraft: true
+          releaseBody: |
+            Téléchargez l'installeur correspondant à votre système ci-dessous.
+
+            **macOS** — l'app n'est pas signée par Apple. Si « dbdump is damaged and can't be opened » s'affiche, ouvrez le Terminal et exécutez une fois :
+            ```
+            xattr -cr /Applications/dbdump.app
+            ```
+            puis lancez l'app normalement.
+
+            **Windows** — si SmartScreen affiche « Windows a protégé votre ordinateur », cliquez sur *Informations complémentaires* → *Exécuter quand même*.
+          # false = la Release est publiée automatiquement dès que la build réussit
+          # (une Release en brouillon n'apparaît pas publiquement et n'est pas
+          # renvoyée par l'API /releases/latest → les boutons de téléchargement
+          # de la landing retombent sur la page GitHub au lieu du binaire direct).
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
