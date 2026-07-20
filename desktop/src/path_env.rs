@@ -71,12 +71,13 @@ fn well_known_dirs() -> Vec<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         let mut v = vec![
-            PathBuf::from("/opt/homebrew/bin"), // Homebrew Apple Silicon
-            PathBuf::from("/usr/local/bin"),    // Homebrew Intel
+            PathBuf::from("/opt/homebrew/bin"),   // Homebrew Apple Silicon
+            PathBuf::from("/usr/local/bin"),      // Homebrew Intel
+            PathBuf::from("/usr/local/mysql/bin"), // Installeur officiel MySQL
         ];
-        // Installeur EDB : /Library/PostgreSQL/<ver>/bin
+        // PostgreSQL — installeur EDB : /Library/PostgreSQL/<ver>/bin
         v.extend(versioned_bins("/Library/PostgreSQL"));
-        // Postgres.app : /Applications/Postgres.app/Contents/Versions/<ver>/bin
+        // PostgreSQL — Postgres.app : .../Versions/<ver>/bin
         v.extend(versioned_bins(
             "/Applications/Postgres.app/Contents/Versions",
         ));
@@ -93,9 +94,15 @@ fn well_known_dirs() -> Vec<PathBuf> {
     }
     #[cfg(target_os = "windows")]
     {
-        // Installeur EDB : C:\Program Files\PostgreSQL\<ver>\bin
+        // PostgreSQL — installeur EDB : C:\Program Files\PostgreSQL\<ver>\bin
         let mut v = versioned_bins(r"C:\Program Files\PostgreSQL");
         v.extend(versioned_bins(r"C:\Program Files (x86)\PostgreSQL"));
+        // MySQL : C:\Program Files\MySQL\MySQL Server <ver>\bin
+        v.extend(versioned_bins(r"C:\Program Files\MySQL"));
+        // MongoDB serveur : C:\Program Files\MongoDB\Server\<ver>\bin
+        v.extend(versioned_bins(r"C:\Program Files\MongoDB\Server"));
+        // MongoDB Database Tools : C:\Program Files\MongoDB\Tools\<ver>\bin
+        v.extend(versioned_bins(r"C:\Program Files\MongoDB\Tools"));
         v
     }
 }

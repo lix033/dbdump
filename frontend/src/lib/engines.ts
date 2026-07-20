@@ -30,7 +30,9 @@ export const ENGINES: Record<EngineId, EngineSpec> = {
     restoreBinary: "pg_restore",
     defaultPort: 5432,
     fileBased: false,
-    installHint: "brew install postgresql@16",
+    // Note : en production, ce conseil est remplacé par celui du backend, adapté
+    // à l'OS (voir desktop/src/engines.rs). Valeur de repli pour le mode mock.
+    installHint: "Installez les outils PostgreSQL (client) pour votre système.",
     formats: [
       {
         value: "custom",
@@ -59,7 +61,7 @@ export const ENGINES: Record<EngineId, EngineSpec> = {
     restoreBinary: "mysql",
     defaultPort: 3306,
     fileBased: false,
-    installHint: "brew install mysql-client",
+    installHint: "Installez les outils client MySQL/MariaDB pour votre système.",
     formats: [
       {
         value: "plain",
@@ -76,7 +78,7 @@ export const ENGINES: Record<EngineId, EngineSpec> = {
     restoreBinary: "sqlite3",
     defaultPort: 0,
     fileBased: true,
-    installHint: "Fourni avec macOS. Sinon : brew install sqlite",
+    installHint: "Généralement fourni par le système (sqlite3).",
     formats: [
       {
         value: "plain",
@@ -99,7 +101,7 @@ export const ENGINES: Record<EngineId, EngineSpec> = {
     restoreBinary: "mongorestore",
     defaultPort: 27017,
     fileBased: false,
-    installHint: "brew install mongodb-database-tools",
+    installHint: "Installez les MongoDB Database Tools pour votre système.",
     formats: [
       {
         value: "directory",
