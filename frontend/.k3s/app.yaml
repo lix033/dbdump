@@ -1,5 +1,5 @@
 #DEPLOYMENT YAML
-name: dbdump-frontend
+name: dbdump
 stack: nextjs
 port: 3097
 healthPath: /

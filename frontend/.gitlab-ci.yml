@@ -1,0 +1,4 @@
+include:
+  - project: 'diit-x/ci-templates'
+    ref: master
+    file: '/.gitlab-ci-base.yml'
