@@ -1,6 +1,7 @@
 mod commands;
 mod engines;
 mod gzip;
+mod path_env;
 mod provision;
 mod runner;
 mod secrets;
@@ -10,6 +11,11 @@ use commands::Jobs;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Lancée depuis le Finder/Dock, l'app n'hérite pas du PATH du shell : sans
+    // ça, psql/mysql/mongosh installés par Homebrew seraient « introuvables ».
+    // À faire avant tout spawn de process enfant.
+    path_env::harmonize();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
