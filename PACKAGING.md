@@ -58,20 +58,27 @@ npm --prefix desktop run tauri -- build --target x86_64-apple-darwin    # Intel
 
 ## 3. Signature (important pour « accessible à tout le monde »)
 
-Sans signature, les utilisateurs voient un avertissement :
+Sans certificat payant, les utilisateurs voient un avertissement au premier
+lancement :
 
-- **macOS (Gatekeeper)** : « L'application ne peut pas être ouverte car elle provient
-  d'un développeur non identifié ». Contournement utilisateur : **clic droit → Ouvrir**
-  (une seule fois). Pour supprimer l'avertissement, il faut un compte **Apple
-  Developer** (99 $/an) et signer + notariser (variables `APPLE_*`, voir le workflow).
+- **macOS** : l'app est **signée ad-hoc** (`signingIdentity: "-"` dans
+  `desktop/tauri.conf.json`), ce qui évite le blocage dur. Selon la version de
+  macOS, l'utilisateur peut tout de même voir « dbdump is damaged and can't be
+  opened » à cause de la **quarantaine** posée sur les fichiers téléchargés.
+  Contournement (une fois) : `xattr -cr /Applications/dbdump.app`. Pour
+  **supprimer** l'avertissement, il faut un compte **Apple Developer** (99 $/an)
+  et signer + **notariser** (variables `APPLE_*`, voir le bloc `env:` commenté du
+  workflow).
+  ⚠️ Le `clic droit → Ouvrir` ne débloque **pas** l'erreur « damaged » — seule la
+  levée de quarantaine ou la notarisation le fait.
 - **Windows (SmartScreen)** : « Windows a protégé votre PC ». Contournement :
   « Informations complémentaires → Exécuter quand même ». Pour le supprimer, un
   **certificat de signature de code** (OV/EV) est requis.
 - **Linux** : pas de signature obligatoire ; l'AppImage se lance directement.
 
-Vous pouvez distribuer **sans signature** dès maintenant (avec la note « clic droit →
-Ouvrir » présente sur la landing page). Ajoutez la signature plus tard sans changer
-le reste.
+Ces contournements sont documentés pour l'utilisateur dans le
+[README](README.md#installation) et sur la landing page. Vous pouvez distribuer
+dès maintenant ; ajoutez la notarisation plus tard sans changer le reste.
 
 ---
 
@@ -94,20 +101,28 @@ Windows et Linux** en parallèle et publie une **Release** avec tous les install
 
 ### Publier une version
 
-1. Bumpez la version dans `desktop/tauri.conf.json` (`"version"`) et
-   `desktop/Cargo.toml`.
+1. Bumpez la version partout : `desktop/tauri.conf.json` (`"version"`),
+   `desktop/Cargo.toml` (+ `Cargo.lock`), et les deux `package.json`
+   (`desktop/`, `frontend/`).
 2. Taggez et poussez :
 
    ```bash
-   git tag v0.1.0
-   git push origin v0.1.0
+   git push origin main
+   git tag v0.1.1
+   git push origin v0.1.1
    ```
 
-3. La CI construit les 4 cibles et crée une **Release en brouillon**. Ouvrez-la
-   dans l'onglet **Releases**, vérifiez les binaires, puis **Publish release**.
+3. La CI construit les 4 cibles et **publie automatiquement** la Release avec
+   tous les installeurs (`releaseDraft: false` dans le workflow). Elle apparaît
+   aussitôt dans l'onglet **Releases** — rien à valider à la main.
 
-> Le workflow tolère l'absence de signature. Pour signer macOS, renseignez les
-> secrets `APPLE_*` du dépôt et décommentez le bloc `env:` correspondant.
+> Repasser en brouillon (pour vérifier avant publication) : mettez
+> `releaseDraft: true` dans `.github/workflows/release.yml`, puis publiez à la
+> main depuis l'onglet Releases.
+>
+> Le workflow tolère l'absence de signature. Pour signer + notariser macOS,
+> renseignez les secrets `APPLE_*` du dépôt et décommentez le bloc `env:`
+> correspondant.
 
 ---
 
