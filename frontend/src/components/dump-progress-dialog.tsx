@@ -137,14 +137,14 @@ export function DumpProgressDialog({
             className="bg-foreground/[0.04] dark:bg-background/50 max-h-44 overflow-y-auto rounded-lg border p-3 font-mono text-xs leading-relaxed"
           >
             {log.map((line, i) => (
-              <div key={i} className="text-muted-foreground">
+              <div key={i} className="text-muted-foreground break-words whitespace-pre-wrap">
                 {line}
               </div>
             ))}
           </div>
         )}
 
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end">
+        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:flex-wrap sm:justify-end">
           {state === "running" && (
             <Button variant="outline" onClick={onCancel}>
               <Loader2 className="size-4 animate-spin" />
