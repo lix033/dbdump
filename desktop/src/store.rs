@@ -32,20 +32,13 @@ pub fn load(app_config_dir: &PathBuf) -> Result<Vec<Connection>, String> {
     let plaintext = match cipher.decrypt(&nonce, ciphertext) {
         Ok(p) => p,
         Err(_) => {
-            // En dev, on bascule le stockage des secrets du trousseau vers un
-            // fichier : l'ancien connections.enc, chiffré avec la clé du
-            // trousseau, devient illisible. On repart d'une liste vide plutôt que
-            // de bloquer. En production, un déchiffrement qui échoue reste une
-            // vraie anomalie qu'on signale.
-            #[cfg(debug_assertions)]
-            {
-                let _ = std::fs::remove_file(&path);
-                return Ok(Vec::new());
-            }
-            #[cfg(not(debug_assertions))]
-            return Err(
-                "déchiffrement impossible : clé du trousseau absente ou fichier altéré".into(),
-            );
+            // Le fichier ne se déchiffre pas avec la clé locale du coffre : soit la
+            // clé (`secrets.key`) a été perdue/régénérée, soit le fichier a été
+            // altéré. Les mots de passe associés sont de toute façon irrécupérables
+            // dans ce cas ; on repart d'une liste vide plutôt que de bloquer
+            // définitivement l'app.
+            let _ = std::fs::remove_file(&path);
+            return Ok(Vec::new());
         }
     };
 

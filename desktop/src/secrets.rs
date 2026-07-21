@@ -1,14 +1,21 @@
 //! Stockage des secrets (mots de passe des bases + clé maître du fichier de
 //! connexions).
 //!
-//! **En release** : trousseau système (Keychain macOS, Credential Manager,
-//! Secret Service) — les secrets ne touchent jamais le disque de l'app.
+//! **Choix de conception : coffre-fort fichier, pas de trousseau système.**
 //!
-//! **En debug (`tauri dev`)** : un simple fichier JSON dans le home. En dev, le
-//! binaire est recompilé à chaque lancement et sa signature change ; le trousseau
-//! ne le reconnaît plus et redemande le mot de passe de session à *chaque* accès
-//! (« Toujours autoriser » saute au rebuild suivant). Ce stockage fichier évite
-//! cette friction. Il n'est **jamais** utilisé dans un build de production.
+//! On n'utilise plus le trousseau de l'OS (Keychain macOS, Credential Manager,
+//! Secret Service Linux). Raison : sans certificat de signature stable (l'app est
+//! ad-hoc/non signée), le Keychain ne reconnaît pas l'app d'un lancement à
+//! l'autre et redemande le mot de passe de session à *chaque* accès —
+//! « Toujours autoriser » ne tient pas. Idem, à divers degrés, sur les autres
+//! plateformes.
+//!
+//! À la place, les secrets sont dans un fichier **chiffré AES-256-GCM**
+//! (`~/.dbdump/secrets.enc`) dont la clé locale (`secrets.key`, 32 octets,
+//! permissions 0600 sous Unix) est générée une fois. Compromis assumé : plus
+//! aucun prompt, sur toutes les plateformes, au prix d'une clé au repos sur la
+//! machine (protégée par les permissions du fichier). Le même backend sert en
+//! debug et en release ; le comportement est identique.
 
 const MASTER_KEY_ID: &str = "master-key";
 
@@ -51,71 +58,119 @@ fn rand_bytes<const N: usize>() -> [u8; N] {
     buf
 }
 
-// --- Release : trousseau système ------------------------------------------------
-#[cfg(not(debug_assertions))]
+// --- Coffre-fort fichier chiffré (toutes plateformes, debug + release) ----------
 mod backend {
-    use keyring::Entry;
-
-    const SERVICE: &str = "com.dbdump.app";
-
-    pub fn set(id: &str, secret: &str) -> Result<(), String> {
-        let entry = Entry::new(SERVICE, id).map_err(|e| e.to_string())?;
-        entry.set_password(secret).map_err(|e| e.to_string())
-    }
-
-    pub fn get(id: &str) -> Result<Option<String>, String> {
-        let entry = Entry::new(SERVICE, id).map_err(|e| e.to_string())?;
-        match entry.get_password() {
-            Ok(p) => Ok(Some(p)),
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(e) => Err(e.to_string()),
-        }
-    }
-
-    pub fn delete(id: &str) -> Result<(), String> {
-        let entry = Entry::new(SERVICE, id).map_err(|e| e.to_string())?;
-        match entry.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(e) => Err(e.to_string()),
-        }
-    }
-}
-
-// --- Debug : fichier JSON local (pas de prompt de trousseau) --------------------
-#[cfg(debug_assertions)]
-mod backend {
+    use aes_gcm::{
+        aead::{Aead, KeyInit},
+        Aes256Gcm, Nonce,
+    };
     use std::collections::HashMap;
     use std::path::PathBuf;
     use std::sync::Mutex;
 
-    // Sérialise les écritures concurrentes sur le fichier (test connexion + dump
-    // peuvent lire/écrire en parallèle).
+    // Sérialise les accès concurrents au fichier (test connexion + dump peuvent
+    // lire/écrire en parallèle).
     static LOCK: Mutex<()> = Mutex::new(());
 
-    /// Emplacement stable par utilisateur : survit aux rebuilds ET aux reboots,
-    /// contrairement à un dossier temporaire.
-    fn path() -> PathBuf {
+    /// Dossier utilisateur stable : survit aux rebuilds ET aux reboots.
+    fn dir() -> PathBuf {
         let base = std::env::var_os("HOME")
             .or_else(|| std::env::var_os("USERPROFILE"))
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir);
-        base.join(".dbdump").join("dev-secrets.json")
+        base.join(".dbdump")
+    }
+
+    fn vault_path() -> PathBuf {
+        dir().join("secrets.enc")
+    }
+    fn key_path() -> PathBuf {
+        dir().join("secrets.key")
+    }
+
+    /// Clé locale du coffre : 32 octets aléatoires, générés une fois puis
+    /// conservés (permissions 0600 sous Unix). C'est le compromis assumé pour se
+    /// passer du trousseau : plus de prompt, clé au repos protégée par les
+    /// permissions du fichier.
+    fn key() -> Result<[u8; 32], String> {
+        if let Ok(b) = std::fs::read(key_path()) {
+            if b.len() == 32 {
+                let mut k = [0u8; 32];
+                k.copy_from_slice(&b);
+                return Ok(k);
+            }
+        }
+        std::fs::create_dir_all(dir()).map_err(|e| e.to_string())?;
+        let mut k = [0u8; 32];
+        getrandom::fill(&mut k).map_err(|e| e.to_string())?;
+        write_private(&key_path(), &k)?;
+        Ok(k)
+    }
+
+    /// Écriture avec permissions restrictives (0600) sous Unix.
+    #[cfg(unix)]
+    fn write_private(p: &PathBuf, data: &[u8]) -> Result<(), String> {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(p)
+            .map_err(|e| e.to_string())?;
+        f.write_all(data).map_err(|e| e.to_string())
+    }
+    #[cfg(not(unix))]
+    fn write_private(p: &PathBuf, data: &[u8]) -> Result<(), String> {
+        std::fs::write(p, data).map_err(|e| e.to_string())
     }
 
     fn load() -> HashMap<String, String> {
-        std::fs::read(path())
-            .ok()
-            .and_then(|b| serde_json::from_slice(&b).ok())
-            .unwrap_or_default()
+        let blob = match std::fs::read(vault_path()) {
+            Ok(b) => b,
+            Err(_) => return HashMap::new(),
+        };
+        if blob.len() < 12 {
+            return HashMap::new();
+        }
+        let k = match key() {
+            Ok(k) => k,
+            Err(_) => return HashMap::new(),
+        };
+        let (nonce_bytes, ciphertext) = blob.split_at(12);
+        let nonce = match Nonce::try_from(nonce_bytes) {
+            Ok(n) => n,
+            Err(_) => return HashMap::new(),
+        };
+        let cipher = Aes256Gcm::new(&k.into());
+        match cipher.decrypt(&nonce, ciphertext) {
+            Ok(pt) => serde_json::from_slice(&pt).unwrap_or_default(),
+            Err(_) => HashMap::new(),
+        }
     }
 
     fn store(map: &HashMap<String, String>) -> Result<(), String> {
-        let p = path();
-        if let Some(parent) = p.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-        let data = serde_json::to_vec_pretty(map).map_err(|e| e.to_string())?;
-        std::fs::write(&p, data).map_err(|e| e.to_string())
+        std::fs::create_dir_all(dir()).map_err(|e| e.to_string())?;
+        let k = key()?;
+        let cipher = Aes256Gcm::new(&k.into());
+
+        // Nonce neuf à chaque écriture (réutilisation = rupture de GCM).
+        let mut nonce_bytes = [0u8; 12];
+        getrandom::fill(&mut nonce_bytes).map_err(|e| e.to_string())?;
+        let plaintext = serde_json::to_vec(map).map_err(|e| e.to_string())?;
+        let ciphertext = cipher
+            .encrypt(&Nonce::from(nonce_bytes), plaintext.as_ref())
+            .map_err(|e| e.to_string())?;
+
+        let mut blob = nonce_bytes.to_vec();
+        blob.extend_from_slice(&ciphertext);
+
+        // Écriture atomique pour ne pas laisser un coffre tronqué.
+        let p = vault_path();
+        let tmp = p.with_extension("tmp");
+        write_private(&tmp, &blob)?;
+        std::fs::rename(&tmp, &p).map_err(|e| e.to_string())
     }
 
     pub fn set(id: &str, secret: &str) -> Result<(), String> {

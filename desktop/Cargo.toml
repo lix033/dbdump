@@ -28,9 +28,7 @@ tauri-plugin-opener = "2.5.4"
 tokio = { version = "1.53", features = ["process", "io-util", "rt", "macros", "sync"] }
 # Localisation de pg_dump / mysqldump / … dans le PATH.
 which = "8.0"
-# Mots de passe : trousseau système (Keychain, Credential Manager, Secret Service).
-keyring = { version = "4.1", features = ["apple-native-keyring-store", "windows-native-keyring-store", "dbus-secret-service-keyring-store"] }
-# Chiffrement du fichier de connexions au repos.
+# Chiffrement du fichier de connexions et du coffre de secrets au repos.
 aes-gcm = "0.11"
 base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
