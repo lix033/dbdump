@@ -78,14 +78,14 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # --- Signature macOS (facultatif mais recommandé) : décommentez et
-          # --- renseignez les secrets du dépôt pour éviter l'avertissement Gatekeeper.
-          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # --- Signature + notarisation macOS : renseignez les secrets du dépôt
+          # --- (Settings → Secrets and variables → Actions) pour éviter Gatekeeper.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: desktop
           tagName: ${{ github.ref_name }}
@@ -93,11 +93,7 @@ jobs:
           releaseBody: |
             Téléchargez l'installeur correspondant à votre système ci-dessous.
 
-            **macOS** — l'app n'est pas signée par Apple. Si « dbdump is damaged and can't be opened » s'affiche, ouvrez le Terminal et exécutez une fois :
-            ```
-            xattr -cr /Applications/dbdump.app
-            ```
-            puis lancez l'app normalement.
+            **macOS** — l'application est signée avec un certificat Apple Developer et notarisée par Apple : ouvrez le `.dmg` et glissez DBDump dans Applications, elle démarre sans avertissement.
 
             **Windows** — si SmartScreen affiche « Windows a protégé votre ordinateur », cliquez sur *Informations complémentaires* → *Exécuter quand même*.
           # false = la Release est publiée automatiquement dès que la build réussit
@@ -107,3 +103,37 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      # Tauri notarise le bundle .app mais PAS le conteneur .dmg : un .dmg non
+      # notarisé déclenche un avertissement Gatekeeper au montage après téléchargement.
+      # On le notarise + agrafe ici, puis on remplace l'asset déjà publié sur la Release.
+      - name: Notariser le DMG (macOS)
+        if: startsWith(matrix.platform, 'macos')
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_ID:-}" ] || [ -z "${APPLE_PASSWORD:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ]; then
+            echo "Secrets APPLE_* absents → notarisation du DMG ignorée (le .dmg restera non notarisé)."
+            exit 0
+          fi
+          shopt -s nullglob
+          dmgs=(desktop/target/*/release/bundle/dmg/*.dmg)
+          if [ ${#dmgs[@]} -eq 0 ]; then
+            echo "Aucun DMG produit sur cette cible, rien à notariser."
+            exit 0
+          fi
+          for dmg in "${dmgs[@]}"; do
+            echo "== Notarisation de $dmg =="
+            xcrun notarytool submit "$dmg" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --wait
+            xcrun stapler staple "$dmg"
+            echo "== Remplacement de l'asset notarisé sur la Release $GITHUB_REF_NAME =="
+            gh release upload "$GITHUB_REF_NAME" "$dmg" --clobber
+          done

@@ -6,8 +6,8 @@ healthPath: /
 
 expose:
   prod:
-    mode: nodeport
-    domain: dbdump.nameksociety.com
+    mode: ingress
+    domain: dbdump.cc
   staging:
     mode: ingress
     domain: dbdump.staging.nameksociety.com
