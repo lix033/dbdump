@@ -2,6 +2,7 @@
   "name": "dbdump-desktop",
   "version": "0.1.1",
   "private": true,
+  "license": "MIT",
   "description": "Coquille Tauri de DBDump : commandes système, trousseau, dumps. Le frontend vit dans ../frontend.",
   "scripts": {
     "dev": "tauri dev",
