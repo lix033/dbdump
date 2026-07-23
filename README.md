@@ -45,27 +45,22 @@ Téléchargez l'installeur de votre système sur la **[page des Releases](../../
 | Windows 10 / 11      | `dbdump_x.y.z_x64-setup.exe`         |
 | Linux                | `.AppImage` ou `.deb`                |
 
-L'app n'est pas signée par un certificat payant : votre système peut afficher un
-avertissement au **premier lancement**. C'est attendu — voici comment passer.
+macOS est **signé et notarisé par Apple** : l'app s'ouvre normalement, sans aucune
+manipulation. Sur **Windows**, un avertissement SmartScreen peut encore apparaître
+au premier lancement tant que la signature de code n'est pas déployée — voici
+comment passer.
 
-### macOS — « dbdump is damaged and can't be opened »
+### macOS — aucun avertissement
 
-Ce message vient de la **quarantaine** posée par macOS sur tout fichier
-téléchargé, appliquée à une app non signée par Apple. Levez-la **une fois**
-depuis le Terminal :
-
-```bash
-xattr -cr /Applications/dbdump.app
-```
-
-Puis ouvrez l'app normalement.
-⚠️ Le `clic droit → Ouvrir` ne suffit **pas** pour l'erreur « damaged » : il faut
-bien la commande ci-dessus.
+L'application est signée avec un certificat **Apple Developer ID** puis **notarisée**
+par Apple. Ouvrez le `.dmg` et glissez `DBDump` dans `Applications` : elle démarre
+directement.
 
 ### Windows — « Windows a protégé votre ordinateur »
 
-SmartScreen bloque les apps non signées. Cliquez **Informations complémentaires
-→ Exécuter quand même**.
+SmartScreen prévient pour les applications encore peu téléchargées. Cliquez
+**Informations complémentaires → Exécuter quand même**. _(La signature de code est
+en cours de déploiement pour supprimer cet avertissement.)_
 
 ### Linux
 

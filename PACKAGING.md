@@ -56,29 +56,27 @@ npm --prefix desktop run tauri -- build --target x86_64-apple-darwin    # Intel
 
 ---
 
-## 3. Signature (important pour « accessible à tout le monde »)
+## 3. Signature
 
-Sans certificat payant, les utilisateurs voient un avertissement au premier
-lancement :
-
-- **macOS** : l'app est **signée ad-hoc** (`signingIdentity: "-"` dans
-  `desktop/tauri.conf.json`), ce qui évite le blocage dur. Selon la version de
-  macOS, l'utilisateur peut tout de même voir « dbdump is damaged and can't be
-  opened » à cause de la **quarantaine** posée sur les fichiers téléchargés.
-  Contournement (une fois) : `xattr -cr /Applications/dbdump.app`. Pour
-  **supprimer** l'avertissement, il faut un compte **Apple Developer** (99 $/an)
-  et signer + **notariser** (variables `APPLE_*`, voir le bloc `env:` commenté du
-  workflow).
-  ⚠️ Le `clic droit → Ouvrir` ne débloque **pas** l'erreur « damaged » — seule la
-  levée de quarantaine ou la notarisation le fait.
-- **Windows (SmartScreen)** : « Windows a protégé votre PC ». Contournement :
-  « Informations complémentaires → Exécuter quand même ». Pour le supprimer, un
-  **certificat de signature de code** (OV/EV) est requis.
+- **macOS — signé + notarisé (opérationnel).** `desktop/tauri.conf.json` fixe
+  `macOS.signingIdentity` à `Developer ID Application: Maximus KOLOU (YBK5Z7SFC6)`.
+  En CI, le bloc `env: APPLE_*` du workflow lit 6 secrets du dépôt
+  (`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`,
+  `APPLE_ID` = `nameksociety@gmail.com`, `APPLE_PASSWORD` = mot de passe
+  d'application, `APPLE_TEAM_ID` = `YBK5Z7SFC6`). Tauri signe puis notarise l'app.
+  ⚠️ Tauri notarise le bundle `.app` **mais pas le conteneur `.dmg`** : une étape
+  dédiée du workflow (« Notariser le DMG ») notarise + agrafe chaque `.dmg` et
+  remplace l'asset sur la Release. Résultat : l'app **et** le `.dmg` s'ouvrent sans
+  avertissement Gatekeeper.
+- **Windows (SmartScreen) : en cours.** Les `.exe`/`.msi` ne sont pas encore signés
+  → « Windows a protégé votre PC » (contournement : « Informations complémentaires
+  → Exécuter quand même »). Signature prévue via **SignPath Foundation** (certificat
+  OV gratuit pour projets open source ; nécessite la licence MIT du dépôt et une
+  demande sur [signpath.org/apply](https://signpath.org/apply)).
 - **Linux** : pas de signature obligatoire ; l'AppImage se lance directement.
 
-Ces contournements sont documentés pour l'utilisateur dans le
-[README](README.md#installation) et sur la landing page. Vous pouvez distribuer
-dès maintenant ; ajoutez la notarisation plus tard sans changer le reste.
+> Les instructions utilisateur (macOS sans avertissement, contournement Windows)
+> sont dans le [README](README.md#installation) et sur la landing page.
 
 ---
 
@@ -120,9 +118,10 @@ Windows et Linux** en parallèle et publie une **Release** avec tous les install
 > `releaseDraft: true` dans `.github/workflows/release.yml`, puis publiez à la
 > main depuis l'onglet Releases.
 >
-> Le workflow tolère l'absence de signature. Pour signer + notariser macOS,
-> renseignez les secrets `APPLE_*` du dépôt et décommentez le bloc `env:`
-> correspondant.
+> La signature macOS est active : le bloc `env: APPLE_*` du workflow est déjà en
+> place et lit les 6 secrets du dépôt. Si ces secrets sont absents, le build
+> réussit quand même (app signée ad-hoc, non notarisée) — l'étape « Notariser le
+> DMG » s'ignore alors d'elle-même.
 
 ---
 
@@ -152,7 +151,8 @@ plateforme sont résolus automatiquement (API GitHub) dès qu'une release existe
 ### Déployer (VPS / k3s via GitLab)
 
 Le déploiement est piloté par `frontend/.k3s/app.yaml` (nom, port 3097, domaine
-`dbdump.nameksociety.com`) et `frontend/Dockerfile`. Le Dockerfile :
+`dbdump.cc` en prod, `dbdump.staging.nameksociety.com` en staging) et
+`frontend/Dockerfile`. Le Dockerfile :
 
 1. construit l'export statique (`npm run build` → `out/`) ;
 2. le sert avec **nginx sur le port 3097** via `frontend/nginx.conf`, qui **masque

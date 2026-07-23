@@ -94,8 +94,8 @@ const FAQ = [
     a: "PostgreSQL, MySQL / MariaDB, SQLite et MongoDB — chacune avec son outil de dump officiel et ses options (structure seule, données seules, compression, exclusion de tables, formats custom / SQL brut / répertoire).",
   },
   {
-    q: "« L'application ne peut pas être ouverte » sur macOS ?",
-    a: "C'est l'avertissement Gatekeeper pour une app non signée. Clic droit sur DBDump → Ouvrir → Ouvrir. À faire une seule fois.",
+    q: "Vais-je voir un avertissement de sécurité au lancement ?",
+    a: "Sur macOS, non : l'application est signée avec un certificat Apple Developer et notarisée par Apple, elle s'ouvre normalement. Sur Windows, SmartScreen peut afficher « Windows a protégé votre ordinateur » tant que la signature de code n'est pas déployée — cliquez « Informations complémentaires » puis « Exécuter quand même ».",
   },
 ];
 
@@ -347,13 +347,10 @@ export default function LandingPage() {
                 .
               </p>
               <p>
-                <strong className="text-foreground">macOS</strong> — l&apos;app n&apos;est pas
-                signée par Apple. Si vous voyez «&nbsp;dbdump is damaged&nbsp;», levez la mise en
-                quarantaine (une seule fois) :{" "}
-                <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
-                  xattr -cr /Applications/dbdump.app
-                </code>
-                , puis ouvrez l&apos;app.
+                <strong className="text-foreground">macOS</strong> — l&apos;app est signée avec un
+                certificat Apple Developer et notarisée par Apple. Ouvrez le{" "}
+                <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">.dmg</code> et
+                glissez DBDump dans Applications : elle démarre sans avertissement.
               </p>
               <p>
                 <strong className="text-foreground">Windows</strong> — SmartScreen peut afficher
