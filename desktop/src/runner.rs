@@ -208,21 +208,31 @@ mod tests {
                 .unwrap_or(false)
     }
 
-    /// Dump réel de la base locale `orncity`. Ignoré si Postgres n'est pas là,
-    /// pour ne pas casser un CI sans base.
+    /// Base locale sur laquelle tirer les dumps réels. Pas de nom en dur : chaque
+    /// machine a la sienne, on la donne via `DBDUMP_IT_DATABASE`.
+    fn it_database() -> Option<String> {
+        std::env::var("DBDUMP_IT_DATABASE").ok().filter(|d| !d.is_empty())
+    }
+
+    /// Dump réel d'une base Postgres locale. Ignoré si Postgres n'est pas là ou si
+    /// `DBDUMP_IT_DATABASE` n'est pas défini, pour ne pas casser un CI sans base.
     #[tokio::test]
     async fn real_postgres_custom_dump_produces_a_valid_file() {
         if !pg_available() {
             eprintln!("Postgres indisponible, test ignoré");
             return;
         }
+        let Some(database) = it_database() else {
+            eprintln!("DBDUMP_IT_DATABASE non défini, test ignoré");
+            return;
+        };
         let dir = std::env::temp_dir().join("dbdump-it");
         std::fs::create_dir_all(&dir).unwrap();
         let dir = dir.to_string_lossy().to_string();
 
         let mut logs = Vec::new();
         let outcome = execute_dump(
-            &pg_conn("orncity"),
+            &pg_conn(&database),
             &opts(&dir, "it.dump", DumpFormat::Custom),
             None,
             &std::env::temp_dir(),
@@ -245,6 +255,10 @@ mod tests {
             eprintln!("Postgres indisponible, test ignoré");
             return;
         }
+        let Some(database) = it_database() else {
+            eprintln!("DBDUMP_IT_DATABASE non défini, test ignoré");
+            return;
+        };
         let dir = std::env::temp_dir().join("dbdump-it");
         std::fs::create_dir_all(&dir).unwrap();
         let dir = dir.to_string_lossy().to_string();
@@ -252,7 +266,7 @@ mod tests {
         let mut o = opts(&dir, "schema.sql", DumpFormat::Plain);
         o.schema_only = true;
         let outcome = execute_dump(
-            &pg_conn("orncity"),
+            &pg_conn(&database),
             &o,
             None,
             &std::env::temp_dir(),

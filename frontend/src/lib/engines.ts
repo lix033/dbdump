@@ -125,7 +125,7 @@ export function engineOf(id: EngineId): EngineSpec {
   return ENGINES[id];
 }
 
-/** Nom de fichier proposé : orncity_2026-07-17_10-56-47.dump */
+/** Nom de fichier proposé : app_prod_2026-07-17_10-56-47.dump */
 export function suggestFileName(database: string, format: DumpFormat, engine: EngineId): string {
   const spec = ENGINES[engine];
   const ext = spec.formats.find((f) => f.value === format)?.extension ?? "";

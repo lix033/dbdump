@@ -279,7 +279,7 @@ mod tests {
             host: "localhost".into(),
             port: 5432,
             username: "mac".into(),
-            database: "orncity".into(),
+            database: "app_prod".into(),
             file_path: None,
             ssl_mode: SslMode::Prefer,
             created_at: "2026-07-17".into(),
@@ -386,6 +386,6 @@ mod tests {
         let mut o = opts(DumpFormat::Plain);
         o.exclude_tables = vec!["logs".into()];
         let cmd = build_dump_command(&conn(EngineId::Mysql), &o, "/tmp/out.sql", None);
-        assert!(cmd.args.contains(&"--ignore-table=orncity.logs".to_string()));
+        assert!(cmd.args.contains(&"--ignore-table=app_prod.logs".to_string()));
     }
 }

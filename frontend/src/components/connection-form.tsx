@@ -148,7 +148,7 @@ function ConnectionFormBody({
             <Label htmlFor="name">Nom</Label>
             <Input
               id="name"
-              placeholder="Prod OrnCity"
+              placeholder="DB production"
               value={draft.name}
               onChange={(e) => set("name", e.target.value)}
             />

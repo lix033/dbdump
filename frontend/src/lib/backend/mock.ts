@@ -79,9 +79,9 @@ export class MockBackend implements Backend {
 
   async listDatabases(draft: ConnectionDraft): Promise<string[]> {
     await sleep(400);
-    if (draft.engine === "postgres") return ["orncity", "postgres", "template1"];
-    if (draft.engine === "mysql") return ["app", "information_schema", "wordpress"];
-    if (draft.engine === "mongodb") return ["admin", "analytics", "orncity"];
+    if (draft.engine === "postgres") return ["app_prod", "postgres", "template1"];
+    if (draft.engine === "mysql") return ["app_prod", "information_schema", "wordpress"];
+    if (draft.engine === "mongodb") return ["admin", "analytics", "app_prod"];
     return [draft.database || "main"];
   }
 
