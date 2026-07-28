@@ -5,6 +5,7 @@ import { Loader2, FolderOpen, CheckCircle2, XCircle, Plug } from "lucide-react";
 import { getBackend } from "@/lib/backend";
 import { ENGINE_LIST, ENGINES } from "@/lib/engines";
 import { ENGINE_UI } from "@/lib/engine-ui";
+import { useI18n } from "@/i18n/provider";
 import { EngineAvatar } from "@/components/engine-avatar";
 import type { Connection, ConnectionDraft, EngineId, SslMode, TestResult } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -83,6 +84,8 @@ function ConnectionFormBody({
   onSaved: (conn: Connection) => void;
 }) {
   const backend = getBackend();
+  const { t } = useI18n();
+  const form = t.app.form;
   const [draft, setDraft] = useState<ConnectionDraft>(() => (editing ? toDraft(editing) : EMPTY));
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<TestResult | null>(null);
@@ -134,28 +137,26 @@ function ConnectionFormBody({
           <EngineAvatar engine={draft.engine} size="md" />
           <div>
             <DialogTitle className="text-base">
-              {editing ? "Modifier la connexion" : "Nouvelle connexion"}
+              {editing ? form.editTitle : form.newTitle}
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              Mot de passe rangé dans le trousseau système, jamais sur le disque.
-            </DialogDescription>
+            <DialogDescription className="text-xs">{form.description}</DialogDescription>
           </div>
         </div>
       </DialogHeader>
 
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="name">Nom</Label>
+            <Label htmlFor="name">{form.name}</Label>
             <Input
               id="name"
-              placeholder="DB production"
+              placeholder={form.namePlaceholder}
               value={draft.name}
               onChange={(e) => set("name", e.target.value)}
             />
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="engine">Moteur</Label>
+            <Label htmlFor="engine">{form.engine}</Label>
             <Select value={draft.engine} onValueChange={(v) => changeEngine(v as EngineId)}>
               <SelectTrigger id="engine">
                 <SelectValue />
@@ -176,12 +177,12 @@ function ConnectionFormBody({
 
           {spec.fileBased ? (
             <div className="grid gap-2">
-              <Label htmlFor="file">Fichier de base</Label>
+              <Label htmlFor="file">{form.file}</Label>
               <div className="flex gap-2">
                 <Input
                   id="file"
                   readOnly
-                  placeholder="Aucun fichier sélectionné"
+                  placeholder={form.noFile}
                   value={draft.filePath ?? ""}
                   className="font-mono text-xs"
                 />
@@ -194,7 +195,7 @@ function ConnectionFormBody({
             <>
               <div className="grid grid-cols-[1fr_7rem] gap-2">
                 <div className="grid gap-2">
-                  <Label htmlFor="host">Hôte</Label>
+                  <Label htmlFor="host">{form.host}</Label>
                   <Input
                     id="host"
                     value={draft.host}
@@ -202,7 +203,7 @@ function ConnectionFormBody({
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="port">Port</Label>
+                  <Label htmlFor="port">{form.port}</Label>
                   <Input
                     id="port"
                     type="number"
@@ -214,7 +215,7 @@ function ConnectionFormBody({
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="grid gap-2">
-                  <Label htmlFor="username">Utilisateur</Label>
+                  <Label htmlFor="username">{form.username}</Label>
                   <Input
                     id="username"
                     value={draft.username}
@@ -222,11 +223,11 @@ function ConnectionFormBody({
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="password">Mot de passe</Label>
+                  <Label htmlFor="password">{form.password}</Label>
                   <Input
                     id="password"
                     type="password"
-                    placeholder={editing ? "Inchangé" : ""}
+                    placeholder={editing ? form.passwordUnchanged : ""}
                     value={draft.password}
                     onChange={(e) => set("password", e.target.value)}
                   />
@@ -235,7 +236,7 @@ function ConnectionFormBody({
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="grid gap-2">
-                  <Label htmlFor="database">Base</Label>
+                  <Label htmlFor="database">{form.database}</Label>
                   <Input
                     id="database"
                     value={draft.database}
@@ -243,15 +244,15 @@ function ConnectionFormBody({
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="ssl">SSL</Label>
+                  <Label htmlFor="ssl">{form.ssl}</Label>
                   <Select value={draft.sslMode} onValueChange={(v) => set("sslMode", v as SslMode)}>
                     <SelectTrigger id="ssl">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="disable">Désactivé</SelectItem>
-                      <SelectItem value="prefer">Préféré</SelectItem>
-                      <SelectItem value="require">Requis</SelectItem>
+                      <SelectItem value="disable">{form.sslDisable}</SelectItem>
+                      <SelectItem value="prefer">{form.sslPrefer}</SelectItem>
+                      <SelectItem value="require">{form.sslRequire}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -276,7 +277,7 @@ function ConnectionFormBody({
                 <p>{result.message}</p>
                 {result.ok && result.serverVersion && (
                   <p className="text-xs opacity-80">
-                    Version {result.serverVersion} · {result.latencyMs} ms
+                    {form.serverInfo(result.serverVersion, result.latencyMs ?? 0)}
                   </p>
                 )}
               </div>
@@ -287,15 +288,15 @@ function ConnectionFormBody({
         <DialogFooter className="sm:justify-between">
           <Button variant="outline" onClick={handleTest} disabled={testing}>
             {testing ? <Loader2 className="size-4 animate-spin" /> : <Plug className="size-4" />}
-            Tester
+            {form.test}
           </Button>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Annuler
+              {form.cancel}
             </Button>
             <Button onClick={handleSave} disabled={!canSave || saving}>
               {saving && <Loader2 className="size-4 animate-spin" />}
-              Enregistrer
+              {form.save}
             </Button>
           </div>
         </DialogFooter>

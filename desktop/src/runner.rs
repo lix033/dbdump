@@ -5,6 +5,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
 use crate::engines::{build_dump_command, Connection, DumpOptions, EngineId};
+use crate::i18n::{msg, Lang};
 
 pub struct DumpOutcome {
     pub size_bytes: u64,
@@ -17,11 +18,15 @@ pub struct DumpOutcome {
 /// `on_log` reçoit chaque ligne de stderr au fil de l'eau. `cancel` est un futur
 /// qui, s'il se résout avant la fin, tue le process — l'appelant Tauri y branche
 /// l'annulation depuis l'UI ; un test passe `std::future::pending()`.
+///
+/// `lang` ne concerne que les messages de DBDump (progression, erreurs) : la
+/// sortie des outils est relayée telle quelle, dans sa langue d'origine.
 pub async fn execute_dump(
     conn: &Connection,
     opts: &DumpOptions,
     password: Option<&str>,
     tools_dir: &Path,
+    lang: Lang,
     mut on_log: impl FnMut(String),
     cancel: impl std::future::Future<Output = ()>,
 ) -> Result<DumpOutcome, String> {
@@ -32,7 +37,7 @@ pub async fn execute_dump(
     // exécute le binaire portable par son chemin absolu. Les autres moteurs
     // restent tributaires des outils système (déjà signalés par check_binary).
     let resolved_bin = if matches!(conn.engine, EngineId::Postgres) {
-        crate::provision::resolve_pg_dump(tools_dir, &mut on_log)?
+        crate::provision::resolve_pg_dump(tools_dir, lang, &mut on_log)?
             .to_string_lossy()
             .into_owned()
     } else {
@@ -52,7 +57,7 @@ pub async fn execute_dump(
 
     let mut child = command
         .spawn()
-        .map_err(|e| format!("impossible de lancer {} : {e}", cmd_spec.bin))?;
+        .map_err(|e| msg::spawn_failed(lang, cmd_spec.bin, &e.to_string()))?;
 
     if let (Some(secret), Some(mut stdin)) = (cmd_spec.stdin_input.clone(), child.stdin.take()) {
         stdin
@@ -111,7 +116,7 @@ pub async fn execute_dump(
             s = child.wait() => break s.map_err(|e| e.to_string())?,
             _ = &mut cancel => {
                 let _ = child.kill().await;
-                return Err("Dump annulé".into());
+                return Err(msg::dump_cancelled(lang).into());
             }
         }
     };
@@ -133,14 +138,14 @@ pub async fn execute_dump(
         let start = stderr_lines.len().saturating_sub(8);
         let detail = stderr_lines[start..].join("\n");
         return Err(if detail.trim().is_empty() {
-            format!("{} a échoué (code {code}), sans détail sur la sortie d'erreur.", cmd_spec.bin)
+            msg::dump_failed_silent(lang, cmd_spec.bin, code)
         } else {
-            format!("{} a échoué (code {code}) :\n{detail}", cmd_spec.bin)
+            msg::dump_failed(lang, cmd_spec.bin, code, &detail)
         });
     }
 
     let final_path = if cmd_spec.gzip_after {
-        on_log("compression gzip…".into());
+        on_log(msg::gzip_compressing(lang).into());
         crate::gzip::gzip_file(&output_path)?
     } else {
         output_path.clone()
@@ -151,9 +156,11 @@ pub async fn execute_dump(
     let size = match std::fs::metadata(&final_path) {
         Ok(m) => m.len(),
         Err(e) => {
-            return Err(format!(
-                "{} s'est terminé sans erreur mais le fichier attendu est introuvable :\n{final_path}\n({e})",
-                cmd_spec.bin
+            return Err(msg::output_missing(
+                lang,
+                cmd_spec.bin,
+                &final_path,
+                &e.to_string(),
             ))
         }
     };
@@ -167,6 +174,7 @@ pub async fn execute_dump(
 mod tests {
     use super::*;
     use crate::engines::{DumpFormat, EngineId, SslMode};
+    use crate::i18n::Lang;
 
     fn pg_conn(database: &str) -> Connection {
         Connection {
@@ -236,6 +244,7 @@ mod tests {
             &opts(&dir, "it.dump", DumpFormat::Custom),
             None,
             &std::env::temp_dir(),
+            Lang::En,
             |line| logs.push(line),
             std::future::pending(),
         )
@@ -270,6 +279,7 @@ mod tests {
             &o,
             None,
             &std::env::temp_dir(),
+            Lang::En,
             |_| {},
             std::future::pending(),
         )
@@ -293,6 +303,7 @@ mod tests {
             &opts(&dir, "nope.dump", DumpFormat::Custom),
             None,
             &std::env::temp_dir(),
+            Lang::En,
             |_| {},
             std::future::pending(),
         )

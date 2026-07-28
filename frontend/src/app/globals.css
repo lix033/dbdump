@@ -194,6 +194,61 @@
     animation: indeterminate-bar 1.15s ease-in-out infinite;
   }
 
+  /* ── Landing ──────────────────────────────────────────────────────────────
+     Décors statiques (pas d'animation) : ils restent actifs même en
+     « reduced motion », ils ne bougent pas. */
+
+  /* Quadrillage du hero : lignes très discrètes, effacées vers les bords par un
+     masque radial pour ne jamais concurrencer le texte. */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, var(--border) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+    background-size: 56px 56px;
+    -webkit-mask-image: radial-gradient(ellipse 65% 55% at 50% 0%, #000 35%, transparent 100%);
+    mask-image: radial-gradient(ellipse 65% 55% at 50% 0%, #000 35%, transparent 100%);
+  }
+
+  /* Estompe les bords d'un défilement horizontal (bandeau de moteurs). */
+  .fade-edges {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+    mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+  }
+
+  /* Carte qui réagit au survol : léger soulèvement + halo de marque en haut.
+     Le halo passe par color-mix pour suivre le thème clair/sombre tout seul. */
+  .card-hover {
+    position: relative;
+    isolation: isolate;
+    transition:
+      transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1),
+      border-color 0.35s ease,
+      box-shadow 0.35s ease;
+  }
+  .card-hover::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(
+      120% 75% at 50% 0%,
+      color-mix(in oklab, var(--primary) 14%, transparent),
+      transparent 65%
+    );
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }
+  .card-hover:hover::after {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .card-hover:hover {
+      transform: translateY(-3px);
+    }
+  }
+
   /* Animations d'accueil de la landing — désactivées si l'utilisateur préfère
      réduire les animations (le contenu reste alors visible et statique). */
   @media (prefers-reduced-motion: no-preference) {
@@ -235,6 +290,54 @@
     }
     .glow-pulse {
       animation: dbd-glow 6s ease-in-out infinite;
+    }
+
+    /* Bandeau des moteurs qui défile en continu. La piste contient deux copies
+       de la liste ; on translate de -50% pour boucler sans saut visible. */
+    @keyframes dbd-marquee {
+      from {
+        transform: translateX(0);
+      }
+      to {
+        transform: translateX(-50%);
+      }
+    }
+    .animate-marquee {
+      animation: dbd-marquee 34s linear infinite;
+    }
+    .animate-marquee:hover {
+      animation-play-state: paused;
+    }
+
+    /* Curseur du journal de l'aperçu produit. */
+    @keyframes dbd-caret {
+      0%,
+      49% {
+        opacity: 1;
+      }
+      50%,
+      100% {
+        opacity: 0;
+      }
+    }
+    .animate-caret {
+      animation: dbd-caret 1.1s steps(1) infinite;
+    }
+
+    /* Pastille « en cours » de l'aperçu : halo qui se propage. */
+    @keyframes dbd-ping {
+      0% {
+        transform: scale(1);
+        opacity: 0.55;
+      }
+      75%,
+      100% {
+        transform: scale(2.4);
+        opacity: 0;
+      }
+    }
+    .animate-ping-soft {
+      animation: dbd-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
     }
   }
 }

@@ -14,9 +14,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getBackend } from "@/lib/backend";
-import { DOWNLOAD_DIR_LABEL } from "@/lib/backend/mock";
 import { ENGINES, suggestFileName } from "@/lib/engines";
 import { buildDumpCommand, formatCommand } from "@/lib/dump-command";
+import { useI18n } from "@/i18n/provider";
 import type { BinaryStatus, Connection, DumpFormat, DumpJob, DumpOptions } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +56,8 @@ export function DumpPanel({
   onJobDone: (job: DumpJob) => void;
 }) {
   const backend = getBackend();
+  const { t } = useI18n();
+  const panel = t.app.panel;
   const spec = ENGINES[connection.engine];
 
   // Le composant est monté avec key={connection.id} par le parent : à chaque
@@ -100,7 +102,7 @@ export function DumpPanel({
   // En mode téléchargement (navigateur sans sélecteur de dossier), la destination
   // est implicitement le gestionnaire de téléchargements : pas besoin d'un choix
   // de dossier pour lancer.
-  const effectiveDestinationDir = supportsDir ? destinationDir : DOWNLOAD_DIR_LABEL;
+  const effectiveDestinationDir = supportsDir ? destinationDir : t.mock.downloadDirLabel;
 
   const options: DumpOptions = useMemo(
     () => ({
@@ -160,7 +162,7 @@ export function DumpPanel({
     try {
       if (lastJob) await backend.downloadResult(lastJob.id);
     } catch (err) {
-      toast.error("Téléchargement impossible", {
+      toast.error(t.app.toast.downloadFailed, {
         description: err instanceof Error ? err.message : String(err),
       });
     }
@@ -174,9 +176,9 @@ export function DumpPanel({
     if (!lastJob) return;
     try {
       const copied = await backend.copyToDownloads(lastJob.outputPath);
-      toast.success("Copié dans Téléchargements", { description: copied });
+      toast.success(t.app.toast.copiedToDownloads, { description: copied });
     } catch (err) {
-      toast.error("Copie impossible", {
+      toast.error(t.app.toast.copyFailed, {
         description: err instanceof Error ? err.message : String(err),
       });
     }
@@ -187,7 +189,9 @@ export function DumpPanel({
   // Réellement bloquant : ni installé, ni fournissable par DBDump.
   const missingBinary = !!binary && !binary.found && !binary.provisionable;
   const canRun = !!effectiveDestinationDir && !!fileName && !missingBinary && !running;
-  const formatSpec = spec.formats.find((f) => f.value === format);
+  // Libellés des formats : structure côté `engines.ts`, texte côté dictionnaire.
+  const formatTexts = t.app.formats[connection.engine];
+  const formatHint = formatTexts[format]?.hint;
 
   return (
     <div className="flex h-full flex-col">
@@ -224,8 +228,8 @@ export function DumpPanel({
             {binary.found
               ? `${binary.name} ${binary.version ?? ""}`.trim()
               : willProvision
-                ? `${binary.name} · à télécharger`
-                : `${binary.name} absent`}
+                ? panel.binaryToDownload(binary.name)
+                : panel.binaryMissing(binary.name)}
           </Badge>
         )}
       </header>
@@ -235,16 +239,13 @@ export function DumpPanel({
           <div className="flex gap-2.5 text-sm">
             <PackageOpen className="text-warning mt-0.5 size-4 shrink-0" />
             <div>
-              <p className="font-medium">
-                {binary!.name} sera téléchargé automatiquement au premier dump
-              </p>
+              <p className="font-medium">{panel.provisionTitle(binary!.name)}</p>
               <p className="text-muted-foreground">
-                Aucune installation requise : DBDump récupère une version portable de PostgreSQL
-                (une fois, puis hors-ligne). Vous pouvez aussi installer la vôtre avec{" "}
+                {panel.provisionTextBefore}
                 <code className="bg-background/60 rounded px-1.5 py-0.5 font-mono text-xs">
                   {binary!.installHint}
                 </code>
-                .
+                {panel.provisionTextAfter}
               </p>
             </div>
           </div>
@@ -256,13 +257,13 @@ export function DumpPanel({
           <div className="flex gap-2.5 text-sm">
             <AlertTriangle className="text-warning mt-0.5 size-4 shrink-0" />
             <div>
-              <p className="font-medium">{binary!.name} n&apos;est pas installé sur cette machine</p>
+              <p className="font-medium">{panel.missingTitle(binary!.name)}</p>
               <p className="text-muted-foreground">
-                DBDump s&apos;appuie sur les outils officiels du moteur. Installez-le avec{" "}
+                {panel.missingTextBefore}
                 <code className="bg-background/60 rounded px-1.5 py-0.5 font-mono text-xs">
                   {binary!.installHint}
                 </code>
-                .
+                {panel.missingTextAfter}
               </p>
             </div>
           </div>
@@ -273,35 +274,37 @@ export function DumpPanel({
         <div className="mx-auto grid max-w-3xl gap-5">
           <SectionCard
             icon={FolderDown}
-            title="Destination"
-            hint={supportsDir ? "Où enregistrer la sauvegarde" : "Où atterrit le fichier"}
+            title={panel.destination.title}
+            hint={supportsDir ? panel.destination.hintDesktop : panel.destination.hintWeb}
           >
             {supportsDir ? (
               <div className="flex gap-2">
                 <Input
                   readOnly
-                  placeholder="Choisir un dossier…"
+                  placeholder={panel.destination.pick}
                   value={destinationDir}
                   className="bg-muted/40 font-mono text-xs"
                 />
                 <Button variant="outline" onClick={handlePickDir}>
                   <FolderOpen className="size-4" />
-                  Parcourir
+                  {panel.destination.browse}
                 </Button>
               </div>
             ) : (
               <div className="border-border bg-muted/40 text-muted-foreground flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-xs leading-relaxed">
                 <FolderDown className="mt-0.5 size-4 shrink-0" />
                 <span>
-                  En mode web, lancez le dump : le fichier se{" "}
-                  <span className="text-foreground font-medium">télécharge automatiquement</span> à
-                  la fin (bouton pour le relancer si besoin).
+                  {panel.destination.webNoteBefore}
+                  <span className="text-foreground font-medium">
+                    {panel.destination.webNoteStrong}
+                  </span>
+                  {panel.destination.webNoteAfter}
                 </span>
               </div>
             )}
             <div className="grid gap-1.5">
               <Label htmlFor="filename" className="text-muted-foreground text-xs">
-                Nom du fichier
+                {panel.destination.fileName}
               </Label>
               <Input
                 id="filename"
@@ -312,7 +315,7 @@ export function DumpPanel({
             </div>
           </SectionCard>
 
-          <SectionCard icon={FileCog} title="Format" hint="Type de fichier produit">
+          <SectionCard icon={FileCog} title={panel.format.title} hint={panel.format.hint}>
             <Select value={format} onValueChange={(v) => setFormat(v as DumpFormat)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -320,22 +323,26 @@ export function DumpPanel({
               <SelectContent>
                 {spec.formats.map((f) => (
                   <SelectItem key={f.value} value={f.value}>
-                    {f.label}
+                    {formatTexts[f.value]?.label ?? f.value}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {formatSpec && (
-              <p className="text-muted-foreground text-xs leading-relaxed">{formatSpec.hint}</p>
+            {formatHint && (
+              <p className="text-muted-foreground text-xs leading-relaxed">{formatHint}</p>
             )}
           </SectionCard>
 
-          <SectionCard icon={SlidersHorizontal} title="Options" hint="Ce que contient le dump">
+          <SectionCard
+            icon={SlidersHorizontal}
+            title={panel.options.title}
+            hint={panel.options.hint}
+          >
             <div className="grid gap-1">
               <Toggle
                 id="schema-only"
-                label="Structure seulement"
-                hint="Aucune donnée, uniquement les CREATE TABLE."
+                label={panel.options.schemaOnly.label}
+                hint={panel.options.schemaOnly.hint}
                 checked={schemaOnly}
                 onChange={(v) => {
                   setSchemaOnly(v);
@@ -344,8 +351,8 @@ export function DumpPanel({
               />
               <Toggle
                 id="data-only"
-                label="Données seulement"
-                hint="Aucun schéma, uniquement les INSERT."
+                label={panel.options.dataOnly.label}
+                hint={panel.options.dataOnly.hint}
                 checked={dataOnly}
                 onChange={(v) => {
                   setDataOnly(v);
@@ -354,15 +361,15 @@ export function DumpPanel({
               />
               <Toggle
                 id="clean"
-                label="Nettoyer avant restauration"
-                hint="Ajoute les DROP avant les CREATE."
+                label={panel.options.clean.label}
+                hint={panel.options.clean.hint}
                 checked={clean}
                 onChange={setClean}
               />
               <Toggle
                 id="gzip"
-                label="Compresser (gzip)"
-                hint="Réduit la taille du fichier produit."
+                label={panel.options.gzip.label}
+                hint={panel.options.gzip.hint}
                 checked={gzip}
                 onChange={setGzip}
               />
@@ -370,7 +377,7 @@ export function DumpPanel({
 
             <div className="grid gap-1.5 pt-1">
               <Label htmlFor="exclude" className="text-muted-foreground text-xs">
-                Tables à exclure
+                {panel.options.excludeTables}
               </Label>
               <textarea
                 id="exclude"
@@ -380,11 +387,11 @@ export function DumpPanel({
                 onChange={(e) => setExcludeRaw(e.target.value)}
                 className="border-input bg-transparent placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/40 min-h-16 w-full rounded-lg border px-3 py-2 font-mono text-xs shadow-xs outline-none focus-visible:ring-[3px]"
               />
-              <p className="text-muted-foreground text-xs">Une table par ligne.</p>
+              <p className="text-muted-foreground text-xs">{panel.options.excludeHint}</p>
             </div>
           </SectionCard>
 
-          <SectionCard icon={Terminal} title="Commande exécutée" hint="Copiable dans un terminal">
+          <SectionCard icon={Terminal} title={panel.command.title} hint={panel.command.hint}>
             <pre className="bg-foreground/[0.04] dark:bg-background/50 text-muted-foreground overflow-x-auto rounded-lg border p-3 font-mono text-xs leading-relaxed">
               {preview}
             </pre>
@@ -398,12 +405,12 @@ export function DumpPanel({
           {supportsDir
             ? destinationDir
               ? `${destinationDir}/${fileName}`
-              : "Choisissez un dossier de destination"
+              : panel.destination.pickFolderFirst
             : `↓ ${fileName}`}
         </p>
         <Button size="lg" className="shadow-soft shrink-0" onClick={handleRun} disabled={!canRun}>
           {running ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-          {running ? "Dump en cours…" : "Lancer le dump"}
+          {running ? panel.running : panel.run}
         </Button>
       </footer>
 

@@ -1,15 +1,16 @@
 import type { DumpFormat, EngineId } from "./types";
 
+/** Un format proposé par un moteur. Les libellés et explications sont dans les
+ *  dictionnaires (`t.app.formats[engine][format]`) : ici, seule la structure. */
 export interface FormatOption {
   value: DumpFormat;
-  label: string;
   /** Extension appliquée au nom de fichier proposé. */
   extension: string;
-  hint: string;
 }
 
 export interface EngineSpec {
   id: EngineId;
+  /** Nom du moteur : une marque, identique dans toutes les langues. */
   label: string;
   /** Binaire qui produit le dump. */
   dumpBinary: string;
@@ -19,7 +20,6 @@ export interface EngineSpec {
   /** SQLite ne se connecte pas par le réseau : on demande un fichier. */
   fileBased: boolean;
   formats: FormatOption[];
-  installHint: string;
 }
 
 export const ENGINES: Record<EngineId, EngineSpec> = {
@@ -30,28 +30,10 @@ export const ENGINES: Record<EngineId, EngineSpec> = {
     restoreBinary: "pg_restore",
     defaultPort: 5432,
     fileBased: false,
-    // Note : en production, ce conseil est remplacé par celui du backend, adapté
-    // à l'OS (voir desktop/src/engines.rs). Valeur de repli pour le mode mock.
-    installHint: "Installez les outils PostgreSQL (client) pour votre système.",
     formats: [
-      {
-        value: "custom",
-        label: "Custom (.dump)",
-        extension: ".dump",
-        hint: "Compressé, restauration sélective avec pg_restore. Recommandé.",
-      },
-      {
-        value: "plain",
-        label: "SQL brut (.sql)",
-        extension: ".sql",
-        hint: "Lisible et éditable, restauration avec psql.",
-      },
-      {
-        value: "directory",
-        label: "Répertoire",
-        extension: "",
-        hint: "Un fichier par table, seul format supportant le dump parallèle.",
-      },
+      { value: "custom", extension: ".dump" },
+      { value: "plain", extension: ".sql" },
+      { value: "directory", extension: "" },
     ],
   },
   mysql: {
@@ -61,15 +43,7 @@ export const ENGINES: Record<EngineId, EngineSpec> = {
     restoreBinary: "mysql",
     defaultPort: 3306,
     fileBased: false,
-    installHint: "Installez les outils client MySQL/MariaDB pour votre système.",
-    formats: [
-      {
-        value: "plain",
-        label: "SQL brut (.sql)",
-        extension: ".sql",
-        hint: "Le seul format produit par mysqldump.",
-      },
-    ],
+    formats: [{ value: "plain", extension: ".sql" }],
   },
   sqlite: {
     id: "sqlite",
@@ -78,20 +52,9 @@ export const ENGINES: Record<EngineId, EngineSpec> = {
     restoreBinary: "sqlite3",
     defaultPort: 0,
     fileBased: true,
-    installHint: "Généralement fourni par le système (sqlite3).",
     formats: [
-      {
-        value: "plain",
-        label: "SQL brut (.sql)",
-        extension: ".sql",
-        hint: "Export texte via .dump.",
-      },
-      {
-        value: "archive",
-        label: "Copie du fichier (.db)",
-        extension: ".db",
-        hint: "Copie cohérente via VACUUM INTO. Le plus rapide.",
-      },
+      { value: "plain", extension: ".sql" },
+      { value: "archive", extension: ".db" },
     ],
   },
   mongodb: {
@@ -101,20 +64,9 @@ export const ENGINES: Record<EngineId, EngineSpec> = {
     restoreBinary: "mongorestore",
     defaultPort: 27017,
     fileBased: false,
-    installHint: "Installez les MongoDB Database Tools pour votre système.",
     formats: [
-      {
-        value: "directory",
-        label: "Répertoire BSON",
-        extension: "",
-        hint: "Format natif mongodump, restauration avec mongorestore.",
-      },
-      {
-        value: "archive",
-        label: "Archive (.archive)",
-        extension: ".archive",
-        hint: "Un seul fichier, plus simple à déplacer.",
-      },
+      { value: "directory", extension: "" },
+      { value: "archive", extension: ".archive" },
     ],
   },
 };

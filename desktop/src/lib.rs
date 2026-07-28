@@ -1,6 +1,7 @@
 mod commands;
 mod engines;
 mod gzip;
+mod i18n;
 mod path_env;
 mod provision;
 mod runner;

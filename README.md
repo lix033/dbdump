@@ -1,193 +1,226 @@
 # DBDump
 
-**Sauvegardez vos bases de données en un clic, depuis une app de bureau.**
+**English** · [Français](README.fr.md)
 
-PostgreSQL · MySQL/MariaDB · SQLite · MongoDB — **100 % local**, aucune donnée
-n'est envoyée sur Internet, aucun serveur à installer.
+**Back up your databases in one click, from a desktop app.**
 
----
-
-## Sommaire
-
-- [Fonctionnalités](#fonctionnalités)
-- [Installation](#installation)
-- [Utilisation](#utilisation)
-- [Moteurs & outils requis](#moteurs--outils-requis)
-- [Sécurité & confidentialité](#sécurité--confidentialité)
-- [Développement](#développement)
-- [Construire & publier](#construire--publier)
+PostgreSQL · MySQL/MariaDB · SQLite · MongoDB — **100% local**: no data ever
+leaves your machine, no server to install.
 
 ---
 
-## Fonctionnalités
+## Contents
 
-- **Dump** de PostgreSQL, MySQL/MariaDB, SQLite et MongoDB.
-- Formats adaptés à chaque moteur (custom, SQL brut, répertoire, archive…),
-  **compression gzip**, et filtres : schéma seul, données seules, exclusion de
-  tables.
-- **pg_dump inclus à la demande** : si PostgreSQL n'est pas installé sur la
-  machine, DBDump télécharge une version portable au premier dump — puis
-  fonctionne hors-ligne. Rien à configurer.
-- Connexions enregistrées (chiffrées), **test de connexion**, et **journal en
-  direct** pendant la sauvegarde.
-- Disponible sur **macOS** (Apple Silicon & Intel), **Windows** et **Linux**.
+- [Features](#features)
+- [Install](#install)
+- [Usage](#usage)
+- [Engines & required tools](#engines--required-tools)
+- [Security & privacy](#security--privacy)
+- [Languages](#languages)
+- [Development](#development)
+- [Build & publish](#build--publish)
+- [Documentation](#documentation)
 
 ---
 
-## Installation
+## Features
 
-Téléchargez l'installeur de votre système sur la **[page des Releases](../../releases/latest)**.
+- **Dumps** PostgreSQL, MySQL/MariaDB, SQLite and MongoDB.
+- Formats tailored to each engine (custom, plain SQL, directory, archive…),
+  **gzip compression**, and filters: schema only, data only, table exclusion.
+- **pg_dump included on demand**: if PostgreSQL is not installed on the machine,
+  DBDump downloads a portable build on the first dump — then works offline.
+  Nothing to configure.
+- Saved connections (encrypted), **connection test**, and a **live log** while
+  the backup runs.
+- Available on **macOS** (Apple Silicon & Intel), **Windows** and **Linux**.
+- Interface and messages in **English and French**.
 
-| Système              | Fichier à télécharger                |
-| -------------------- | ------------------------------------ |
-| macOS Apple Silicon  | `dbdump_x.y.z_aarch64.dmg`           |
-| macOS Intel          | `dbdump_x.y.z_x64.dmg`               |
-| Windows 10 / 11      | `dbdump_x.y.z_x64-setup.exe`         |
-| Linux                | `.AppImage` ou `.deb`                |
+---
 
-macOS est **signé et notarisé par Apple** : l'app s'ouvre normalement, sans aucune
-manipulation. Sur **Windows**, un avertissement SmartScreen peut encore apparaître
-au premier lancement tant que la signature de code n'est pas déployée — voici
-comment passer.
+## Install
 
-### macOS — aucun avertissement
+Download the installer for your system from the
+**[Releases page](../../releases/latest)**.
 
-L'application est signée avec un certificat **Apple Developer ID** puis **notarisée**
-par Apple. Ouvrez le `.dmg` et glissez `DBDump` dans `Applications` : elle démarre
-directement.
+| System              | File to download             |
+| ------------------- | ---------------------------- |
+| macOS Apple Silicon | `dbdump_x.y.z_aarch64.dmg`   |
+| macOS Intel         | `dbdump_x.y.z_x64.dmg`       |
+| Windows 10 / 11     | `dbdump_x.y.z_x64-setup.exe` |
+| Linux               | `.AppImage` or `.deb`        |
 
-### Windows — « Windows a protégé votre ordinateur »
+macOS builds are **signed and notarized by Apple**: the app opens normally, with
+nothing to work around. On **Windows**, a SmartScreen warning may still appear on
+first launch until code signing is deployed — here is how to get past it.
 
-SmartScreen prévient pour les applications encore peu téléchargées. Cliquez
-**Informations complémentaires → Exécuter quand même**. _(La signature de code est
-en cours de déploiement pour supprimer cet avertissement.)_
+### macOS — no warning
+
+The app is signed with an **Apple Developer ID** certificate and **notarized** by
+Apple. Open the `.dmg` and drag `DBDump` into `Applications`: it starts right
+away.
+
+### Windows — “Windows protected your PC”
+
+SmartScreen warns about applications that few people have downloaded yet. Click
+**More info → Run anyway**. _(Code signing is being rolled out to remove this
+warning.)_
 
 ### Linux
 
-L'AppImage se lance directement (au besoin : `chmod +x dbdump_*.AppImage`). Le
-`.deb` s'installe via `sudo dpkg -i dbdump_*.deb` ou votre gestionnaire de
-paquets.
+The AppImage runs directly (if needed: `chmod +x dbdump_*.AppImage`). The `.deb`
+installs with `sudo dpkg -i dbdump_*.deb` or through your package manager.
 
 ---
 
-## Utilisation
+## Usage
 
-1. **Ajouter une connexion** — choisissez le moteur, renseignez
-   hôte / port / utilisateur / base (ou un fichier pour SQLite). Le bouton
-   **Tester** vérifie l'accès avant d'enregistrer.
-2. **Lancer une sauvegarde** — sélectionnez le format et les options (compression,
-   schéma seul, tables exclues…), puis **Sauvegarder**. Une fenêtre affiche la
-   progression et le journal en direct.
-3. **Récupérer le fichier** — à la fin : **Ouvrir le dossier** ou **Copier vers
-   Téléchargements**.
+1. **Add a connection** — pick the engine, fill in host / port / user / database
+   (or a file for SQLite). The **Test** button checks access before you save.
+2. **Run a backup** — choose the format and options (compression, schema only,
+   excluded tables…), then **Run the dump**. A window shows the progress and the
+   live log.
+3. **Get the file** — when it finishes: **Open folder** or **Copy to Downloads**.
 
 ---
 
-## Moteurs & outils requis
+## Engines & required tools
 
-DBDump s'appuie sur les outils officiels de chaque moteur. L'app **indique ceux
-qui manquent** et comment les installer selon votre système.
+DBDump drives each engine's official tools. The app **tells you which ones are
+missing** and how to install them on your system.
 
-| Moteur          | Outil       | Remarque                                        |
-| --------------- | ----------- | ----------------------------------------------- |
-| PostgreSQL      | `pg_dump`   | **Téléchargé automatiquement** s'il est absent  |
-| MySQL / MariaDB | `mysqldump` | À installer (client MySQL/MariaDB)              |
-| SQLite          | `sqlite3`   | Souvent déjà fourni par le système              |
-| MongoDB         | `mongodump` | MongoDB Database Tools                          |
+| Engine          | Tool        | Note                                     |
+| --------------- | ----------- | ---------------------------------------- |
+| PostgreSQL      | `pg_dump`   | **Downloaded automatically** if missing  |
+| MySQL / MariaDB | `mysqldump` | To install (MySQL/MariaDB client)        |
+| SQLite          | `sqlite3`   | Often already provided by the system     |
+| MongoDB         | `mongodump` | MongoDB Database Tools                   |
 
-> DBDump retrouve ces outils **même lancé depuis le Finder ou le Dock**, où les
-> apps n'héritent pas du `PATH` du terminal : il complète automatiquement le
-> `PATH` avec les emplacements usuels (Homebrew, installeurs PostgreSQL/MySQL/
-> MongoDB…).
-
----
-
-## Sécurité & confidentialité
-
-- **Tout reste local.** Aucune donnée ni identifiant ne quitte votre machine.
-  Pas de télémétrie, pas de compte.
-- **Mots de passe jamais dans la ligne de commande.** Ils sont transmis aux
-  outils par variable d'environnement (`PGPASSWORD`, `MYSQL_PWD`) ou sur stdin
-  (`mongodump`), jamais en argument — l'argv est lisible dans `ps` par tout
-  utilisateur de la machine. Le type `Connection` n'a même pas de champ
-  `password` : impossible de le sérialiser par accident.
-- **Chiffrement au repos.** Les identifiants sont conservés dans un coffre
-  chiffré **AES-256-GCM** (`~/.dbdump/secrets.enc`) ; le fichier des connexions
-  (`connections.enc`) est chiffré de la même façon. La clé locale
-  (`~/.dbdump/secrets.key`, permissions `0600`) ne quitte jamais la machine.
-
-  > **Compromis assumé.** DBDump n'utilise pas le trousseau système (Keychain,
-  > Credential Manager, Secret Service) : sans certificat de signature stable,
-  > celui-ci redemande le mot de passe de session à chaque accès. Le coffre
-  > fichier supprime cette friction sur toutes les plateformes, au prix d'une
-  > clé au repos sur le disque. Elle protège d'un autre utilisateur de la
-  > machine (permissions `0600`), pas d'un logiciel malveillant lancé sous votre
-  > propre compte.
+> DBDump finds these tools **even when launched from the Finder or the Dock**,
+> where apps do not inherit the terminal's `PATH`: it automatically extends
+> `PATH` with the usual locations (Homebrew, PostgreSQL/MySQL/MongoDB
+> installers…).
 
 ---
 
-## Développement
+## Security & privacy
+
+- **Everything stays local.** No data and no credential leaves your machine. No
+  telemetry, no account.
+- **Passwords never on the command line.** They are passed to the tools through
+  environment variables (`PGPASSWORD`, `MYSQL_PWD`) or stdin (`mongodump`), never
+  as an argument — argv is readable through `ps` by any user on the machine. The
+  `Connection` type does not even have a `password` field: it cannot be
+  serialized by accident.
+- **Encrypted at rest.** Credentials are kept in an **AES-256-GCM** encrypted
+  vault (`~/.dbdump/secrets.enc`); the connections file (`connections.enc`) is
+  encrypted the same way. The local key (`~/.dbdump/secrets.key`, `0600`
+  permissions) never leaves the machine.
+
+  > **A deliberate trade-off.** DBDump does not use the system keychain
+  > (Keychain, Credential Manager, Secret Service): without a stable signing
+  > certificate, it asks for the session password on every access. The file
+  > vault removes that friction on every platform, at the cost of a key at rest
+  > on disk. It protects against another user of the machine (`0600`
+  > permissions), not against malware running under your own account.
+
+---
+
+## Languages
+
+The whole platform ships in **English (primary) and French**:
+
+- **Landing page** — English at `/`, French at `/fr/`. Each version is a real
+  static page with its own `<html lang>`, canonical URL and `hreflang`
+  alternates, so both are indexable.
+- **App** (`/app/`, the window the desktop app loads) — one build, language
+  resolved at runtime: the language you picked (stored in the browser), falling
+  back to your system preferences, then English.
+- **Backend messages** (install hints, connection test, dump errors and
+  progress) are localized too: the frontend passes its language to each Tauri
+  command. Output coming from `pg_dump` & co. is relayed verbatim — it is the
+  exact cause, translating it would make it unsearchable.
+
+Adding a string or a new language: see **[docs/en/i18n.md](docs/en/i18n.md)**.
+
+---
+
+## Development
 
 ### Structure
 
 ```
 dbdump/
-├── frontend/   Next.js + Tailwind + shadcn/ui — toute l'interface + la landing
-└── desktop/    Tauri (Rust) — tout ce qui touche au système
+├── frontend/   Next.js + Tailwind + shadcn/ui — the whole UI + the landing page
+└── desktop/    Tauri (Rust) — everything that touches the system
 ```
 
-Ce ne sont **pas** des workspaces : chaque dossier a son `package.json` et
-s'installe séparément. Pour savoir où chercher :
+These are **not** workspaces: each folder has its own `package.json` and is
+installed separately. Where to look:
 
-| Ce que vous cherchez                    | Où                                                     |
-| --------------------------------------- | ------------------------------------------------------ |
-| Un écran, un formulaire, un bouton      | `frontend/src/`                                        |
-| L'exécution de `pg_dump` & co.          | `desktop/src/commands.rs`, `desktop/src/runner.rs`     |
-| Les arguments passés aux outils         | `desktop/src/engines.rs`                               |
-| Localisation des binaires (PATH)        | `desktop/src/path_env.rs`                              |
-| Mots de passe, chiffrement              | `desktop/src/secrets.rs`, `desktop/src/store.rs`       |
-| Fenêtre, permissions                    | `desktop/tauri.conf.json`, `desktop/capabilities/`     |
+| What you are looking for            | Where                                              |
+| ----------------------------------- | -------------------------------------------------- |
+| A screen, a form, a button          | `frontend/src/`                                    |
+| Wording, translations               | `frontend/src/i18n/`, `desktop/src/i18n.rs`        |
+| Running `pg_dump` & co.             | `desktop/src/commands.rs`, `desktop/src/runner.rs` |
+| The arguments passed to the tools   | `desktop/src/engines.rs`                           |
+| Locating binaries (PATH)            | `desktop/src/path_env.rs`                          |
+| Passwords, encryption               | `desktop/src/secrets.rs`, `desktop/src/store.rs`   |
+| Window, permissions                 | `desktop/tauri.conf.json`, `desktop/capabilities/` |
 
-### Prérequis
+### Routes
 
-Node 20+, Rust (via [rustup](https://rustup.rs)), et — pour de vrais dumps — les
-outils du moteur visé (voir [ci-dessus](#moteurs--outils-requis) ; `pg_dump` est
-téléchargé tout seul si absent).
+One Next.js project produces the public site *and* the window embedded by the
+desktop app:
 
-### Lancer l'app
+| Route    | Output                | Role                                            |
+| -------- | --------------------- | ----------------------------------------------- |
+| `/`      | `out/index.html`      | English landing page                            |
+| `/fr/`   | `out/fr/index.html`   | French landing page                             |
+| `/app/`  | `out/app/index.html`  | Dump UI — loaded by Tauri, hidden by nginx      |
+
+Each of the three has its own root layout (route groups `(en)`, `(fr)`, `(app)`)
+so `<html lang>` is correct in the served HTML, without waiting for hydration.
+
+### Prerequisites
+
+Node 20+, Rust (through [rustup](https://rustup.rs)), and — for real dumps — the
+tools of the engine you target (see [above](#engines--required-tools);
+`pg_dump` downloads itself if missing).
+
+### Run the app
 
 ```bash
-# une fois
+# once
 npm --prefix frontend install
 npm --prefix desktop install
 
-# l'app complète (lance le frontend automatiquement, port 1420)
+# the full app (starts the frontend automatically, port 1420)
 npm --prefix desktop run dev
 ```
 
-### Travailler sur l'UI sans Rust
+### Work on the UI without Rust
 
 ```bash
 npm --prefix frontend run dev
 ```
 
-Ouvert dans un navigateur, le frontend bascule sur un **backend simulé**
-(`frontend/src/lib/backend/mock.ts`) : tous les écrans sont pilotables, y compris
-les cas d'erreur, mais aucun vrai dump n'est produit. Un badge « navigateur » le
-rappelle dans la barre latérale.
+Opened in a browser, the frontend switches to a **simulated backend**
+(`frontend/src/lib/backend/mock.ts`): every screen is usable, error cases
+included, but no real dump is produced. A “demo” badge is shown in the sidebar.
 
-### Comment les deux moitiés se parlent
+### How the two halves talk
 
-`frontend/src/lib/backend/` définit un contrat TypeScript (`Backend`) avec deux
-implémentations : `tauri.ts` (les vraies commandes) et `mock.ts` (le navigateur).
-`getBackend()` choisit selon l'environnement. **Aucun composant React n'appelle
-`invoke()` directement** — ça garde l'UI testable hors de Tauri.
+`frontend/src/lib/backend/` defines a TypeScript contract (`Backend`) with two
+implementations: `tauri.ts` (the real commands) and `mock.ts` (the browser).
+`getBackend()` picks one based on the environment. **No React component calls
+`invoke()` directly** — that keeps the UI testable outside of Tauri.
 
-Le frontend envoie des **options structurées**, jamais une commande. C'est
-`desktop/src/engines.rs` qui construit l'argv réellement exécuté ; laisser
-l'écran dicter la ligne de commande ouvrirait une injection pour rien.
-`frontend/src/lib/dump-command.ts` en est un miroir **d'affichage seulement**
-(l'aperçu copiable dans l'UI) : les deux doivent rester alignés.
+The frontend sends **structured options**, never a command. It is
+`desktop/src/engines.rs` that builds the argv actually executed; letting the
+screen dictate the command line would open an injection for nothing.
+`frontend/src/lib/dump-command.ts` is a **display-only** mirror of it (the
+copy-pasteable preview in the UI): the two must stay aligned.
 
 ### Tests
 
@@ -195,13 +228,28 @@ l'écran dicter la ligne de commande ouvrirait une injection pour rien.
 npm --prefix desktop run test   # cargo test
 ```
 
-Ils verrouillent l'invariant clé : **aucun mot de passe dans l'argv**, quel que
-soit le moteur.
+They lock down the key invariant: **no password in argv**, whatever the engine.
 
 ---
 
-## Construire & publier
+## Build & publish
 
-La construction des installeurs (macOS/Windows/Linux), la signature et la
-publication automatique via GitHub Releases sont décrites dans
-**[PACKAGING.md](PACKAGING.md)**.
+Building the installers (macOS/Windows/Linux), signing and publishing through
+GitHub Releases are described in **[docs/en/packaging.md](docs/en/packaging.md)**.
+
+---
+
+## Documentation
+
+| Document                                  | Contents                                   |
+| ----------------------------------------- | ------------------------------------------ |
+| [docs/en/packaging.md](docs/en/packaging.md) | Build, signing, release, hosting        |
+| [docs/en/i18n.md](docs/en/i18n.md)           | How the bilingual EN/FR system works    |
+
+French versions: [docs/fr/](docs/fr/).
+
+---
+
+## License
+
+[MIT](LICENSE).

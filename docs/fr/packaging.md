@@ -1,12 +1,15 @@
 # Packaging & distribution de DBDump
 
-Ce guide explique comment **construire** l'application de bureau pour macOS, Windows
-et Linux, et comment la **distribuer** à tout le monde via GitHub Releases + la
-landing page (`landing/`).
+[English](../en/packaging.md) · **Français** — [← README](../../README.fr.md)
 
-> Rappel d'architecture : `frontend/` est l'UI (Next.js, buildée en statique) que
-> l'app desktop `desktop/` (Tauri/Rust) embarque. Les deux sont nécessaires à
-> l'app. `landing/` est **indépendant** : c'est le site public de téléchargement.
+Ce guide explique comment **construire** l'application de bureau pour macOS,
+Windows et Linux, et comment la **distribuer** via GitHub Releases + la landing
+page publique.
+
+> Rappel d'architecture : `frontend/` est un seul projet Next.js qui produit à la
+> fois la **landing publique** (`/` en anglais, `/fr/` en français) et l'**UI de
+> dump** (`/app/`) embarquée par l'app desktop `desktop/` (Tauri/Rust). Les deux
+> dossiers sont nécessaires à l'app.
 
 ---
 
@@ -38,12 +41,12 @@ Les installeurs sont produits dans :
 ```
 desktop/target/release/bundle/
 ├─ macos/     dbdump.app
-├─ dmg/       dbdump_0.1.0_aarch64.dmg     (ou _x64 sur Intel)
-├─ msi/       dbdump_0.1.0_x64_en-US.msi   (Windows)
-├─ nsis/      dbdump_0.1.0_x64-setup.exe   (Windows)
-├─ deb/       dbdump_0.1.0_amd64.deb       (Linux)
+├─ dmg/       dbdump_0.1.1_aarch64.dmg     (ou _x64 sur Intel)
+├─ msi/       dbdump_0.1.1_x64_en-US.msi   (Windows)
+├─ nsis/      dbdump_0.1.1_x64-setup.exe   (Windows)
+├─ deb/       dbdump_0.1.1_amd64.deb       (Linux)
 ├─ rpm/       …                            (Linux)
-└─ appimage/  dbdump_0.1.0_amd64.AppImage  (Linux)
+└─ appimage/  dbdump_0.1.1_amd64.AppImage  (Linux)
 ```
 
 ### macOS : produire les deux architectures
@@ -62,8 +65,8 @@ npm --prefix desktop run tauri -- build --target x86_64-apple-darwin    # Intel
   `macOS.signingIdentity` à `Developer ID Application: Maximus KOLOU (YBK5Z7SFC6)`.
   En CI, le bloc `env: APPLE_*` du workflow lit 6 secrets du dépôt
   (`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`,
-  `APPLE_ID` = `nameksociety@gmail.com`, `APPLE_PASSWORD` = mot de passe
-  d'application, `APPLE_TEAM_ID` = `YBK5Z7SFC6`). Tauri signe puis notarise l'app.
+  `APPLE_ID`, `APPLE_PASSWORD` = mot de passe d'application, `APPLE_TEAM_ID`).
+  Tauri signe puis notarise l'app.
   ⚠️ Tauri notarise le bundle `.app` **mais pas le conteneur `.dmg`** : une étape
   dédiée du workflow (« Notariser le DMG ») notarise + agrafe chaque `.dmg` et
   remplace l'asset sur la Release. Résultat : l'app **et** le `.dmg` s'ouvrent sans
@@ -76,14 +79,15 @@ npm --prefix desktop run tauri -- build --target x86_64-apple-darwin    # Intel
 - **Linux** : pas de signature obligatoire ; l'AppImage se lance directement.
 
 > Les instructions utilisateur (macOS sans avertissement, contournement Windows)
-> sont dans le [README](README.md#installation) et sur la landing page.
+> sont dans le [README](../../README.fr.md#installation) et sur la landing page.
 
 ---
 
 ## 4. Distribution automatique (recommandé) — GitHub Actions
 
 Le workflow `.github/workflows/release.yml` construit **macOS (ARM + Intel),
-Windows et Linux** en parallèle et publie une **Release** avec tous les installeurs.
+Windows et Linux** en parallèle et publie une **Release** avec tous les
+installeurs.
 
 ### Mise en place (une fois)
 
@@ -127,32 +131,37 @@ Windows et Linux** en parallèle et publie une **Release** avec tous les install
 
 ## 5. Landing page (dans `frontend/`)
 
-La landing **est le frontend** : c'est la page racine `/` du projet Next.js. L'UI de
-dump (utilisée par l'app desktop) vit sur la route `/app`. Un seul `npm run build`
-produit les deux dans `frontend/out/` :
+La landing **est le frontend** : ce sont les routes `/` (anglais) et `/fr/`
+(français) du projet Next.js. L'UI de dump utilisée par l'app desktop vit sur
+`/app/`. Un seul `npm run build` produit le tout dans `frontend/out/` :
 
 ```
 frontend/out/
-├─ index.html        ← LANDING (site public)
-└─ app/index.html    ← UI de dump (chargée par le desktop)
+├─ index.html        ← LANDING anglaise (site public)
+├─ fr/index.html     ← LANDING française
+├─ app/index.html    ← UI de dump (chargée par le desktop)
+├─ sitemap.xml       ← les deux landings, avec leurs alternates de langue
+└─ robots.txt        ← interdit /app/
 ```
 
 ### Brancher les téléchargements
 
-Dans `frontend/src/app/page.tsx`, en haut, remplacez :
+Dans `frontend/src/lib/site.ts`, remplacez :
 
 ```ts
-const GITHUB_REPO = "dreamercode01/dbdump"; // ← votre dépôt
+export const GITHUB_REPO = "lix033/dbdump"; // ← votre dépôt
+export const SITE_URL = "https://dbdump.nameksociety.com"; // ← votre domaine
 ```
 
 Les boutons pointent alors vers vos GitHub Releases, et les liens directs par
 plateforme sont résolus automatiquement (API GitHub) dès qu'une release existe.
+`SITE_URL` sert aux URL canoniques, aux `hreflang` et au sitemap : mettez-le à
+jour en même temps que le domaine.
 
 ### Déployer (VPS / k3s via GitLab)
 
-Le déploiement est piloté par `frontend/.k3s/app.yaml` (nom, port 3097, domaine
-`dbdump.cc` en prod, `dbdump.staging.nameksociety.com` en staging) et
-`frontend/Dockerfile`. Le Dockerfile :
+Le déploiement est piloté par `frontend/.k3s/app.yaml` (nom, port 3097, domaine)
+et `frontend/Dockerfile`. Le Dockerfile :
 
 1. construit l'export statique (`npm run build` → `out/`) ;
 2. le sert avec **nginx sur le port 3097** via `frontend/nginx.conf`, qui **masque
@@ -173,9 +182,9 @@ docker run -p 3097:3097 dbdump-front   # http://localhost:3097
 ### Les binaires desktop restent hors du VPS
 
 La landing ne **stocke pas** les installeurs : ses boutons pointent vers vos
-**GitHub Releases** (résolus par l'API GitHub via `GITHUB_REPO` dans
-`frontend/src/app/page.tsx`). Le navigateur télécharge directement depuis le CDN de
-GitHub — votre serveur ne sert que la landing.
+**GitHub Releases** (résolus par l'API GitHub via `GITHUB_REPO`). Le navigateur
+télécharge directement depuis le CDN de GitHub — votre serveur ne sert que la
+landing.
 
 ---
 
@@ -186,8 +195,8 @@ GitHub — votre serveur ne sert que la landing.
 npm --prefix desktop run build
 
 # Distribuer partout : configurer une fois le dépôt GitHub, puis
-git tag v0.1.0 && git push origin v0.1.0      # → la CI publie la Release
+git tag v0.1.1 && git push origin v0.1.1      # → la CI publie la Release
 
-# Publier la landing : éditer GITHUB_REPO dans frontend/src/app/page.tsx,
+# Publier la landing : éditer GITHUB_REPO / SITE_URL dans frontend/src/lib/site.ts,
 npm --prefix frontend run build               # puis héberger frontend/out/
 ```

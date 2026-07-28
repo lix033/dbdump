@@ -10,14 +10,9 @@ import type {
 } from "../types";
 import type { Backend } from "./types";
 import { buildDemoDumpText } from "./demo-dump";
+import { currentDictionary } from "@/i18n/current";
 
 const STORE_KEY = "dbdump.connections";
-
-/** Sur le web, on ne choisit pas de dossier de destination : le navigateur ne
- *  peut pas écrire librement sur le disque, et l'expérience attendue est simple —
- *  on lance le dump, le fichier se télécharge. Cette étiquette occupe la
- *  « destination » côté UI. */
-export const DOWNLOAD_DIR_LABEL = "Téléchargements du navigateur";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -59,19 +54,20 @@ export class MockBackend implements Backend {
   private results = new Map<string, { blob: Blob; fileName: string }>();
 
   async testConnection(draft: ConnectionDraft): Promise<TestResult> {
+    const t = currentDictionary().mock;
     await sleep(700);
     if (ENGINES[draft.engine].fileBased) {
       return draft.filePath
-        ? { ok: true, message: "Fichier lisible", latencyMs: 3 }
-        : { ok: false, message: "Aucun fichier sélectionné" };
+        ? { ok: true, message: t.fileReadable, latencyMs: 3 }
+        : { ok: false, message: t.noFileSelected };
     }
-    if (!draft.host) return { ok: false, message: "Hôte manquant" };
+    if (!draft.host) return { ok: false, message: t.missingHost };
     if (!draft.password) {
-      return { ok: false, message: 'Authentification refusée pour "' + draft.username + '"' };
+      return { ok: false, message: t.authRefused(draft.username) };
     }
     return {
       ok: true,
-      message: "Connexion établie",
+      message: t.connected,
       serverVersion: draft.engine === "postgres" ? "15.18" : "8.0.36",
       latencyMs: 42,
     };
@@ -98,14 +94,14 @@ export class MockBackend implements Backend {
       provisionable: false,
       path: found ? `/opt/homebrew/bin/${spec.dumpBinary}` : undefined,
       version: found ? (engine === "postgres" ? "15.18" : "3.43.2") : undefined,
-      installHint: found ? undefined : spec.installHint,
+      installHint: found ? undefined : currentDictionary().app.installHints[engine],
     };
   }
 
   async pickDirectory(): Promise<string | null> {
     // Le web ne choisit pas de dossier : la destination est le gestionnaire de
     // téléchargements. (L'UI n'affiche pas de bouton « Parcourir » en mode web.)
-    return DOWNLOAD_DIR_LABEL;
+    return currentDictionary().mock.downloadDirLabel;
   }
 
   async pickFile(): Promise<string | null> {
@@ -121,6 +117,7 @@ export class MockBackend implements Backend {
     // Même id de job que côté desktop (l'id de connexion) : cancelDump() et le
     // bouton « Télécharger » ciblent ainsi le bon job.
     const id = conn.id;
+    const t = currentDictionary().mock;
     this.cancelled.delete(id);
     const bin = ENGINES[conn.engine].dumpBinary;
     const startedAt = new Date().toISOString();
@@ -131,16 +128,17 @@ export class MockBackend implements Backend {
     };
 
     const excluded = new Set(opts.excludeTables);
+    const target = `${conn.host || conn.filePath || "local"}${conn.port ? `:${conn.port}` : ""}`;
     const steps = [
-      `${bin}: connexion à ${conn.host || conn.filePath || "local"}${conn.port ? `:${conn.port}` : ""}`,
-      `${bin}: lecture du schéma de "${conn.database || conn.filePath || ""}"`,
+      t.connecting(bin, target),
+      t.readingSchema(bin, conn.database || conn.filePath || ""),
       ...["users", "orders", "products"]
-        .filter((t) => !excluded.has(t))
-        .map((t) => `dumping table ${t}`),
-      "écriture des index et contraintes",
+        .filter((table) => !excluded.has(table))
+        .map((table) => t.dumpingTable(table)),
+      t.writingIndexes,
     ];
     for (const s of steps) {
-      if (this.cancelled.has(id)) throw new Error("Dump annulé");
+      if (this.cancelled.has(id)) throw new Error(t.cancelled);
       await sleep(400);
       emit(s);
     }
@@ -156,9 +154,7 @@ export class MockBackend implements Backend {
       gzipped = opts.gzip && typeof CompressionStream !== "undefined";
       if (gzipped && !fileName.endsWith(".gz")) fileName += ".gz";
     } catch (err) {
-      throw new Error(
-        `Impossible de préparer le fichier : ${err instanceof Error ? err.message : String(err)}`,
-      );
+      throw new Error(t.prepareFailed(err instanceof Error ? err.message : String(err)));
     }
 
     const blob = new Blob([bytes], { type: "application/octet-stream" });
@@ -167,11 +163,11 @@ export class MockBackend implements Backend {
 
     // Téléchargement automatique en fin de dump : c'est le comportement attendu
     // sur le web. Le bouton de la fenêtre permet de le relancer si besoin.
-    emit(`téléchargement de ${fileName}`);
+    emit(t.downloading(fileName));
     triggerDownload(blob, fileName);
     const outputPath = fileName;
 
-    emit(`terminé (${blob.size} octets)`);
+    emit(t.finished(blob.size));
 
     return {
       id,
@@ -193,14 +189,14 @@ export class MockBackend implements Backend {
 
   async downloadResult(jobId: string): Promise<void> {
     const result = this.results.get(jobId);
-    if (!result) throw new Error("Aucun fichier à télécharger pour ce dump.");
+    if (!result) throw new Error(currentDictionary().mock.nothingToDownload);
     triggerDownload(result.blob, result.fileName);
   }
 
   async copyToDownloads(): Promise<string> {
     // Sans objet dans le navigateur : c'est downloadResult() qui met le fichier à
     // disposition. Ne devrait pas être appelé (l'UI n'expose ceci qu'en desktop).
-    throw new Error("Indisponible en mode web.");
+    throw new Error(currentDictionary().mock.unavailableOnWeb);
   }
 
   async loadConnections(): Promise<Connection[]> {
@@ -239,6 +235,6 @@ export class MockBackend implements Backend {
   }
 
   async revealInFolder(path: string): Promise<void> {
-    console.info("[mock] révéler dans le Finder :", path);
+    console.info("[mock] reveal in file manager:", path);
   }
 }

@@ -1,5 +1,7 @@
 import { ENGINES } from "../engines";
 import type { Connection, DumpOptions } from "../types";
+import { currentDictionary } from "@/i18n/current";
+import type { Dictionary } from "@/i18n/dictionaries";
 
 /** Génère un contenu de dump *plausible* pour le mode démo (navigateur).
  *
@@ -8,55 +10,63 @@ import type { Connection, DumpOptions } from "../types";
  *  options choisies (structure/données, DROP, tables exclues) pour que le
  *  téléchargement soit tangible et que l'UI se teste de bout en bout. */
 export function buildDemoDumpText(conn: Connection, opts: DumpOptions): string {
+  const t = currentDictionary().demo;
   const spec = ENGINES[conn.engine];
   const now = new Date().toISOString();
   const excluded = new Set(opts.excludeTables);
-  const tables = ["users", "orders", "products"].filter((t) => !excluded.has(t));
+  const tables = ["users", "orders", "products"].filter((table) => !excluded.has(table));
 
   const header = [
-    `-- DBDump (démo web) — export simulé`,
-    `-- Généré le ${now}`,
-    `-- Moteur : ${spec.label} · outil : ${spec.dumpBinary}`,
-    `-- Base : ${conn.database || conn.filePath || "—"}`,
-    `-- Options : ${describeOptions(opts)}`,
+    `-- ${t.header}`,
+    `-- ${t.generatedOn(now)}`,
+    `-- ${t.engine(spec.label, spec.dumpBinary)}`,
+    `-- ${t.database(conn.database || conn.filePath || "—")}`,
+    `-- ${t.options(describeOptions(opts, t))}`,
     `--`,
-    `-- ⚠ Contenu factice : en application de bureau, ${spec.dumpBinary} produit`,
-    `--   ici le dump réel de votre base.`,
+    `-- ${t.fakeWarning(spec.dumpBinary)}`,
+    `--${t.fakeWarningCont}`,
     ``,
   ].join("\n");
 
   if (conn.engine === "mongodb") {
-    return header + buildMongoBody(conn, tables, opts);
+    return header + buildMongoBody(conn, tables, opts, t);
   }
-  return header + buildSqlBody(conn, tables, opts);
+  return header + buildSqlBody(conn, tables, opts, t);
 }
 
-function describeOptions(opts: DumpOptions): string {
+type DemoText = Dictionary["demo"];
+
+function describeOptions(opts: DumpOptions, t: DemoText): string {
   const parts: string[] = [`format=${opts.format}`];
-  if (opts.schemaOnly) parts.push("structure seule");
-  if (opts.dataOnly) parts.push("données seules");
-  if (opts.clean) parts.push("clean/drop");
+  if (opts.schemaOnly) parts.push(t.optSchemaOnly);
+  if (opts.dataOnly) parts.push(t.optDataOnly);
+  if (opts.clean) parts.push(t.optClean);
   if (opts.gzip) parts.push("gzip");
-  if (opts.excludeTables.length) parts.push(`exclut ${opts.excludeTables.join(", ")}`);
+  if (opts.excludeTables.length) parts.push(t.optExcludes(opts.excludeTables.join(", ")));
   return parts.join(", ");
 }
 
-const SAMPLE_ROWS: Record<string, string[]> = {
-  users: [
-    "(1, 'ada@example.com', 'Ada Lovelace', '2024-01-04 09:12:00')",
-    "(2, 'alan@example.com', 'Alan Turing', '2024-02-18 14:03:41')",
-    "(3, 'grace@example.com', 'Grace Hopper', '2024-03-27 08:55:12')",
-  ],
-  orders: [
-    "(1001, 1, 149.90, 'paid', '2024-04-02 10:20:00')",
-    "(1002, 3, 39.00, 'pending', '2024-04-05 16:41:30')",
-  ],
-  products: [
-    "(1, 'Clavier mécanique', 89.00, 42)",
-    "(2, 'Souris ergonomique', 59.00, 130)",
-    "(3, 'Écran 27\"', 329.00, 17)",
-  ],
-};
+/** Lignes d'exemple. Seuls les noms de produits sont traduits : le reste est de
+ *  la donnée neutre (e-mails, montants, états). */
+function sampleRows(t: DemoText): Record<string, string[]> {
+  const [keyboard, mouse, monitor] = t.sampleProducts;
+  return {
+    users: [
+      "(1, 'ada@example.com', 'Ada Lovelace', '2024-01-04 09:12:00')",
+      "(2, 'alan@example.com', 'Alan Turing', '2024-02-18 14:03:41')",
+      "(3, 'grace@example.com', 'Grace Hopper', '2024-03-27 08:55:12')",
+    ],
+    orders: [
+      "(1001, 1, 149.90, 'paid', '2024-04-02 10:20:00')",
+      "(1002, 3, 39.00, 'pending', '2024-04-05 16:41:30')",
+    ],
+    products: [
+      `(1, '${keyboard}', 89.00, 42)`,
+      `(2, '${mouse}', 59.00, 130)`,
+      `(3, '${monitor}', 329.00, 17)`,
+    ],
+  };
+}
 
 const SCHEMAS: Record<string, string> = {
   users:
@@ -89,38 +99,49 @@ const COLUMNS: Record<string, string> = {
   products: "(id, name, price, stock)",
 };
 
-function buildSqlBody(conn: Connection, tables: string[], opts: DumpOptions): string {
+function buildSqlBody(
+  conn: Connection,
+  tables: string[],
+  opts: DumpOptions,
+  t: DemoText,
+): string {
+  const rowsByTable = sampleRows(t);
   const out: string[] = [];
-  for (const t of tables) {
-    out.push(`--`, `-- Table : ${t}`, `--`);
+  for (const table of tables) {
+    out.push(`--`, `-- ${t.tableHeading(table)}`, `--`);
     if (!opts.dataOnly) {
-      if (opts.clean) out.push(`DROP TABLE IF EXISTS ${t};`);
-      out.push(SCHEMAS[t], "");
+      if (opts.clean) out.push(`DROP TABLE IF EXISTS ${table};`);
+      out.push(SCHEMAS[table], "");
     }
     if (!opts.schemaOnly) {
-      const rows = SAMPLE_ROWS[t] ?? [];
-      out.push(`INSERT INTO ${t} ${COLUMNS[t]} VALUES`);
+      const rows = rowsByTable[table] ?? [];
+      out.push(`INSERT INTO ${table} ${COLUMNS[table]} VALUES`);
       out.push(rows.map((r, i) => `  ${r}${i === rows.length - 1 ? ";" : ","}`).join("\n"), "");
     }
   }
-  out.push(`-- Fin du dump de ${conn.database || "la base"}.`, "");
+  out.push(`-- ${t.endOfDump(conn.database || t.theDatabase)}`, "");
   return out.join("\n");
 }
 
-function buildMongoBody(conn: Connection, collections: string[], opts: DumpOptions): string {
-  const out: string[] = [
-    `-- Aperçu textuel (mongodump produit du BSON binaire).`,
-    ``,
-  ];
+function buildMongoBody(
+  conn: Connection,
+  collections: string[],
+  opts: DumpOptions,
+  t: DemoText,
+): string {
+  const rowsByCollection = sampleRows(t);
+  const out: string[] = [`-- ${t.mongoNotice}`, ``];
   for (const c of collections) {
     out.push(`// collection: ${c}`);
     if (opts.schemaOnly) {
-      out.push(`// (structure seule — documents omis)`, ``);
+      out.push(`// ${t.mongoSchemaOnly}`, ``);
       continue;
     }
-    const docs = (SAMPLE_ROWS[c] ?? []).map((_, i) => `{ "_id": ${i + 1}, "collection": "${c}" }`);
+    const docs = (rowsByCollection[c] ?? []).map(
+      (_, i) => `{ "_id": ${i + 1}, "collection": "${c}" }`,
+    );
     out.push(docs.join("\n"), ``);
   }
-  out.push(`// Fin du dump de ${conn.database}.`, ``);
+  out.push(`// ${t.endOfDump(conn.database || t.theDatabase)}`, ``);
   return out.join("\n");
 }

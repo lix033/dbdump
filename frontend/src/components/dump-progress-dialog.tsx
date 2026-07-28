@@ -11,6 +11,8 @@ import {
   X,
 } from "lucide-react";
 import type { Connection, DumpJob } from "@/lib/types";
+import { useI18n } from "@/i18n/provider";
+import { formatBytes } from "@/i18n/format";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,12 +22,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EngineAvatar } from "@/components/engine-avatar";
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} o`;
-  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} Ko`;
-  return `${(n / 1024 ** 2).toFixed(1)} Mo`;
-}
 
 type State = "running" | "success" | "error";
 
@@ -61,6 +57,8 @@ export function DumpProgressDialog({
   onReveal: () => void;
   onCopyToDownloads: () => void;
 }) {
+  const { locale, t } = useI18n();
+  const copy = t.app.progress;
   const logRef = useRef<HTMLDivElement>(null);
   const state: State = running ? "running" : error ? "error" : "success";
 
@@ -70,10 +68,10 @@ export function DumpProgressDialog({
 
   const title =
     state === "running"
-      ? "Sauvegarde en cours…"
+      ? copy.titleRunning
       : state === "success"
-        ? "Sauvegarde terminée"
-        : "La sauvegarde a échoué";
+        ? copy.titleSuccess
+        : copy.titleError;
 
   return (
     <Dialog
@@ -113,7 +111,9 @@ export function DumpProgressDialog({
           <div className="border-success/30 bg-success/10 flex items-start gap-2.5 rounded-lg border px-3 py-2.5">
             <CircleCheck className="text-success mt-0.5 size-4 shrink-0" />
             <div className="min-w-0 text-sm">
-              <p className="font-medium">{formatBytes(job.sizeBytes ?? 0)} écrits</p>
+              <p className="font-medium">
+                {copy.written(formatBytes(job.sizeBytes ?? 0, t, locale))}
+              </p>
               <p className="text-muted-foreground truncate font-mono text-xs">{job.outputPath}</p>
             </div>
           </div>
@@ -123,7 +123,7 @@ export function DumpProgressDialog({
           <div className="border-destructive/30 bg-destructive/5 rounded-lg border p-3">
             <div className="text-destructive mb-1.5 flex items-center gap-1.5 text-sm font-medium">
               <AlertTriangle className="size-4" />
-              Cause remontée par l&apos;outil
+              {copy.errorHeading}
             </div>
             <pre className="text-destructive max-h-40 overflow-auto font-mono text-xs leading-relaxed whitespace-pre-wrap">
               {error}
@@ -148,18 +148,18 @@ export function DumpProgressDialog({
           {state === "running" && (
             <Button variant="outline" onClick={onCancel}>
               <Loader2 className="size-4 animate-spin" />
-              Annuler
+              {copy.cancel}
             </Button>
           )}
 
           {state === "error" && (
             <>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>
-                Fermer
+                {copy.close}
               </Button>
               <Button onClick={onRetry}>
                 <RotateCw className="size-4" />
-                Réessayer
+                {copy.retry}
               </Button>
             </>
           )}
@@ -168,23 +168,23 @@ export function DumpProgressDialog({
             <>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>
                 <X className="size-4" />
-                Fermer
+                {copy.close}
               </Button>
               {isDesktop ? (
                 <>
                   <Button variant="outline" onClick={onCopyToDownloads}>
                     <Download className="size-4" />
-                    Copier vers Téléchargements
+                    {copy.copyToDownloads}
                   </Button>
                   <Button onClick={onReveal}>
                     <FolderOpen className="size-4" />
-                    Ouvrir le dossier
+                    {copy.openFolder}
                   </Button>
                 </>
               ) : (
                 <Button autoFocus onClick={onDownload}>
                   <Download className="size-4" />
-                  Télécharger
+                  {copy.download}
                 </Button>
               )}
             </>

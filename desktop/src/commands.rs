@@ -7,6 +7,7 @@ use tokio::process::Command;
 use tokio::sync::oneshot;
 
 use crate::engines::{Connection, DumpOptions, EngineId, SslMode};
+use crate::i18n::{msg, Lang};
 use crate::runner::execute_dump;
 use crate::{secrets, store};
 
@@ -82,7 +83,7 @@ fn read_version(path: &std::path::Path) -> Option<String> {
 }
 
 #[tauri::command]
-pub fn check_binary(app: tauri::AppHandle, engine: EngineId) -> BinaryStatus {
+pub fn check_binary(app: tauri::AppHandle, engine: EngineId, lang: Lang) -> BinaryStatus {
     let name = engine.dump_binary();
 
     // 1. Outil du système : prioritaire (l'utilisateur choisit sa version).
@@ -117,7 +118,7 @@ pub fn check_binary(app: tauri::AppHandle, engine: EngineId) -> BinaryStatus {
             provisionable: true,
             path: None,
             version: None,
-            install_hint: Some(engine.install_hint().into()),
+            install_hint: Some(engine.install_hint(lang).into()),
         };
     }
 
@@ -128,12 +129,12 @@ pub fn check_binary(app: tauri::AppHandle, engine: EngineId) -> BinaryStatus {
         provisionable: false,
         path: None,
         version: None,
-        install_hint: Some(engine.install_hint().into()),
+        install_hint: Some(engine.install_hint(lang).into()),
     }
 }
 
 #[tauri::command]
-pub async fn test_connection(draft: ConnectionDraft) -> TestResult {
+pub async fn test_connection(draft: ConnectionDraft, lang: Lang) -> TestResult {
     let started = std::time::Instant::now();
 
     if matches!(draft.engine, EngineId::Sqlite) {
@@ -141,13 +142,13 @@ pub async fn test_connection(draft: ConnectionDraft) -> TestResult {
         return match std::fs::metadata(&path) {
             Ok(_) => TestResult {
                 ok: true,
-                message: "Fichier lisible".into(),
+                message: msg::file_readable(lang).into(),
                 server_version: None,
                 latency_ms: Some(started.elapsed().as_millis() as u64),
             },
             Err(e) => TestResult {
                 ok: false,
-                message: format!("Fichier illisible : {e}"),
+                message: msg::file_unreadable(lang, &e.to_string()),
                 server_version: None,
                 latency_ms: None,
             },
@@ -158,7 +159,7 @@ pub async fn test_connection(draft: ConnectionDraft) -> TestResult {
     if which::which(probe).is_err() {
         return TestResult {
             ok: false,
-            message: format!("{probe} introuvable. Installez-le avec : {}", draft.engine.install_hint()),
+            message: msg::probe_missing(lang, probe, draft.engine.install_hint(lang)),
             server_version: None,
             latency_ms: None,
         };
@@ -200,7 +201,7 @@ pub async fn test_connection(draft: ConnectionDraft) -> TestResult {
                 "db.version()",
             ]);
         }
-        EngineId::Sqlite => unreachable!("traité plus haut"),
+        EngineId::Sqlite => unreachable!("handled above"),
     }
 
     let out = cmd.output().await;
@@ -209,7 +210,7 @@ pub async fn test_connection(draft: ConnectionDraft) -> TestResult {
     match out {
         Ok(o) if o.status.success() => TestResult {
             ok: true,
-            message: "Connexion établie".into(),
+            message: msg::connection_established(lang).into(),
             server_version: Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
                 .filter(|s| !s.is_empty()),
             latency_ms: Some(latency),
@@ -238,6 +239,7 @@ pub async fn run_dump(
     conn: Connection,
     opts: DumpOptions,
     on_event: Channel<DumpEvent>,
+    lang: Lang,
     jobs: State<'_, Jobs>,
 ) -> Result<DumpDone, String> {
     let job_id = conn.id.clone();
@@ -254,6 +256,7 @@ pub async fn run_dump(
         &opts,
         password.as_deref(),
         &tools_dir,
+        lang,
         |line| {
             let _ = on_event.send(DumpEvent::Log { line });
         },
@@ -277,15 +280,19 @@ pub async fn run_dump(
 /// l'utilisateur a enregistré le dump ailleurs mais veut aussi le récupérer là où
 /// il attend ses téléchargements. Renvoie le chemin de la copie.
 #[tauri::command]
-pub fn copy_to_downloads(app: tauri::AppHandle, path: String) -> Result<String, String> {
+pub fn copy_to_downloads(
+    app: tauri::AppHandle,
+    path: String,
+    lang: Lang,
+) -> Result<String, String> {
     use std::path::Path;
 
     let src = Path::new(&path);
-    let meta = std::fs::metadata(src).map_err(|e| format!("fichier introuvable : {e}"))?;
+    let meta = std::fs::metadata(src).map_err(|e| msg::source_missing(lang, &e.to_string()))?;
     if meta.is_dir() {
-        return Err("Ce format produit un dossier ; utilisez « Ouvrir le dossier ».".into());
+        return Err(msg::is_a_directory(lang).into());
     }
-    let file_name = src.file_name().ok_or("chemin invalide")?;
+    let file_name = src.file_name().ok_or_else(|| msg::invalid_path(lang))?;
 
     let downloads = app.path().download_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&downloads).map_err(|e| e.to_string())?;

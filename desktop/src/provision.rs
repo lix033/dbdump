@@ -19,6 +19,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::i18n::{msg, Lang};
+
 /// Version PostgreSQL portable téléchargée par défaut. Modifiable ici en un point
 /// unique ; pg_dump sait dumper les serveurs de version égale ou inférieure.
 const PG_VERSION: &str = "17.2.0";
@@ -32,7 +34,7 @@ fn bin_name() -> &'static str {
 }
 
 /// Triplet de cible utilisé dans le nom des assets de release.
-fn target_triple() -> Result<&'static str, String> {
+fn target_triple(lang: Lang) -> Result<&'static str, String> {
     let t = if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         "aarch64-apple-darwin"
     } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
@@ -46,18 +48,18 @@ fn target_triple() -> Result<&'static str, String> {
     } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
         "aarch64-unknown-linux-gnu"
     } else {
-        return Err("plateforme non prise en charge pour le téléchargement de pg_dump".into());
+        return Err(msg::unsupported_platform(lang).into());
     };
     Ok(t)
 }
 
-fn asset_url() -> Result<String, String> {
+fn asset_url(lang: Lang) -> Result<String, String> {
     if let Ok(u) = std::env::var("DBDUMP_PG_URL") {
         if !u.trim().is_empty() {
             return Ok(u);
         }
     }
-    let target = target_triple()?;
+    let target = target_triple(lang)?;
     Ok(format!(
         "https://github.com/theseus-rs/postgresql-binaries/releases/download/{PG_VERSION}/postgresql-{PG_VERSION}-{target}.tar.gz"
     ))
@@ -89,6 +91,7 @@ pub fn find_pg_dump(root: &Path) -> Option<PathBuf> {
 /// nécessaire. `on_log` reçoit la progression pour l'afficher dans la fenêtre.
 pub fn resolve_pg_dump(
     app_data_dir: &Path,
+    lang: Lang,
     on_log: &mut impl FnMut(String),
 ) -> Result<PathBuf, String> {
     if let Ok(path) = which::which("pg_dump") {
@@ -97,12 +100,16 @@ pub fn resolve_pg_dump(
     if let Some(path) = find_pg_dump(&cache_root(app_data_dir)) {
         return Ok(path);
     }
-    provision(app_data_dir, on_log)
+    provision(app_data_dir, lang, on_log)
 }
 
-fn provision(app_data_dir: &Path, on_log: &mut impl FnMut(String)) -> Result<PathBuf, String> {
-    let url = asset_url()?;
-    on_log(format!("pg_dump absent : téléchargement de PostgreSQL {PG_VERSION}…"));
+fn provision(
+    app_data_dir: &Path,
+    lang: Lang,
+    on_log: &mut impl FnMut(String),
+) -> Result<PathBuf, String> {
+    let url = asset_url(lang)?;
+    on_log(msg::pg_download_start(lang, PG_VERSION));
 
     let agent = ureq::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(30))
@@ -111,7 +118,7 @@ fn provision(app_data_dir: &Path, on_log: &mut impl FnMut(String)) -> Result<Pat
     let resp = agent
         .get(&url)
         .call()
-        .map_err(|e| format!("téléchargement impossible ({url}) : {e}"))?;
+        .map_err(|e| msg::download_failed(lang, &url, &e.to_string()))?;
 
     let total: Option<u64> = resp
         .header("Content-Length")
@@ -125,7 +132,7 @@ fn provision(app_data_dir: &Path, on_log: &mut impl FnMut(String)) -> Result<Pat
     loop {
         let n = reader
             .read(&mut chunk)
-            .map_err(|e| format!("lecture du téléchargement interrompue : {e}"))?;
+            .map_err(|e| msg::download_interrupted(lang, &e.to_string()))?;
         if n == 0 {
             break;
         }
@@ -133,24 +140,21 @@ fn provision(app_data_dir: &Path, on_log: &mut impl FnMut(String)) -> Result<Pat
         let mb = buf.len() as u64 / 1_048_576;
         if mb >= last_mb + 5 {
             last_mb = mb;
-            match total {
-                Some(t) => on_log(format!("téléchargement… {mb} / {} Mo", t / 1_048_576)),
-                None => on_log(format!("téléchargement… {mb} Mo")),
-            }
+            on_log(msg::download_progress(lang, mb, total.map(|t| t / 1_048_576)));
         }
     }
 
-    on_log(format!("extraction ({} Mo)…", buf.len() / 1_048_576));
+    on_log(msg::extracting(lang, buf.len() as u64 / 1_048_576));
     let dest = cache_root(app_data_dir);
     std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
     let decoder = flate2::read::GzDecoder::new(&buf[..]);
     let mut archive = tar::Archive::new(decoder);
     archive
         .unpack(&dest)
-        .map_err(|e| format!("extraction impossible : {e}"))?;
+        .map_err(|e| msg::extract_failed(lang, &e.to_string()))?;
 
-    let bin = find_pg_dump(&dest)
-        .ok_or_else(|| "pg_dump introuvable dans l'archive téléchargée".to_string())?;
+    let bin =
+        find_pg_dump(&dest).ok_or_else(|| msg::pg_dump_not_in_archive(lang).to_string())?;
 
     // Sur Unix, s'assurer que le binaire est exécutable (tar préserve normalement
     // les permissions, mais certaines configurations les perdent).
@@ -164,6 +168,6 @@ fn provision(app_data_dir: &Path, on_log: &mut impl FnMut(String)) -> Result<Pat
         }
     }
 
-    on_log("pg_dump prêt.".into());
+    on_log(msg::pg_dump_ready(lang).into());
     Ok(bin)
 }

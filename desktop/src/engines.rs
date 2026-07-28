@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::i18n::Lang;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum EngineId {
@@ -30,39 +32,58 @@ impl EngineId {
     }
 
     /// Conseil d'installation adapté à l'OS courant : `brew` sur macOS n'a aucun
-    /// sens sur Windows ou Linux.
-    pub fn install_hint(&self) -> &'static str {
+    /// sens sur Windows ou Linux. La commande elle-même est neutre ; seule la
+    /// phrase qui l'entoure est traduite.
+    pub fn install_hint(&self, lang: Lang) -> &'static str {
         #[cfg(target_os = "macos")]
         {
             match self {
                 EngineId::Postgres => "brew install postgresql@16",
                 EngineId::Mysql => "brew install mysql-client",
-                EngineId::Sqlite => "Fourni avec macOS (sinon : brew install sqlite)",
+                EngineId::Sqlite => lang.pick(
+                    "Shipped with macOS (otherwise: brew install sqlite)",
+                    "Fourni avec macOS (sinon : brew install sqlite)",
+                ),
                 EngineId::Mongodb => "brew install mongodb-database-tools",
             }
         }
         #[cfg(target_os = "windows")]
         {
             match self {
-                EngineId::Postgres => {
-                    "Installez PostgreSQL : https://www.postgresql.org/download/windows/"
-                }
-                EngineId::Mysql => "Installez MySQL : https://dev.mysql.com/downloads/mysql/",
-                EngineId::Sqlite => "Téléchargez les outils SQLite : https://www.sqlite.org/download.html",
-                EngineId::Mongodb => {
-                    "Installez MongoDB Database Tools : https://www.mongodb.com/try/download/database-tools"
-                }
+                EngineId::Postgres => lang.pick(
+                    "Install PostgreSQL: https://www.postgresql.org/download/windows/",
+                    "Installez PostgreSQL : https://www.postgresql.org/download/windows/",
+                ),
+                EngineId::Mysql => lang.pick(
+                    "Install MySQL: https://dev.mysql.com/downloads/mysql/",
+                    "Installez MySQL : https://dev.mysql.com/downloads/mysql/",
+                ),
+                EngineId::Sqlite => lang.pick(
+                    "Download the SQLite tools: https://www.sqlite.org/download.html",
+                    "Téléchargez les outils SQLite : https://www.sqlite.org/download.html",
+                ),
+                EngineId::Mongodb => lang.pick(
+                    "Install the MongoDB Database Tools: https://www.mongodb.com/try/download/database-tools",
+                    "Installez les MongoDB Database Tools : https://www.mongodb.com/try/download/database-tools",
+                ),
             }
         }
         #[cfg(target_os = "linux")]
         {
             match self {
-                EngineId::Postgres => "sudo apt install postgresql-client (ou le paquet de votre distribution)",
-                EngineId::Mysql => "sudo apt install mysql-client (ou mariadb-client)",
+                EngineId::Postgres => lang.pick(
+                    "sudo apt install postgresql-client (or your distribution's package)",
+                    "sudo apt install postgresql-client (ou le paquet de votre distribution)",
+                ),
+                EngineId::Mysql => lang.pick(
+                    "sudo apt install mysql-client (or mariadb-client)",
+                    "sudo apt install mysql-client (ou mariadb-client)",
+                ),
                 EngineId::Sqlite => "sudo apt install sqlite3",
-                EngineId::Mongodb => {
-                    "Installez MongoDB Database Tools : https://www.mongodb.com/try/download/database-tools"
-                }
+                EngineId::Mongodb => lang.pick(
+                    "Install the MongoDB Database Tools: https://www.mongodb.com/try/download/database-tools",
+                    "Installez les MongoDB Database Tools : https://www.mongodb.com/try/download/database-tools",
+                ),
             }
         }
     }
