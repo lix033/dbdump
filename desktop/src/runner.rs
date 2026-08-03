@@ -21,6 +21,12 @@ pub struct DumpOutcome {
 ///
 /// `lang` ne concerne que les messages de DBDump (progression, erreurs) : la
 /// sortie des outils est relayée telle quelle, dans sa langue d'origine.
+/// Chemin du fichier produit, tel que l'outil l'écrira. Exposé pour que la
+/// surveillance puisse suivre ce même fichier grossir pendant le dump.
+pub fn output_path(opts: &DumpOptions) -> String {
+    format!("{}/{}", opts.destination_dir, opts.file_name)
+}
+
 pub async fn execute_dump(
     conn: &Connection,
     opts: &DumpOptions,
@@ -30,7 +36,7 @@ pub async fn execute_dump(
     mut on_log: impl FnMut(String),
     cancel: impl std::future::Future<Output = ()>,
 ) -> Result<DumpOutcome, String> {
-    let output_path = format!("{}/{}", opts.destination_dir, opts.file_name);
+    let output_path = output_path(opts);
     let cmd_spec = build_dump_command(conn, opts, &output_path, password);
 
     // Postgres : si pg_dump n'est pas installé, on le télécharge (une fois) et on
@@ -58,6 +64,10 @@ pub async fn execute_dump(
     let mut child = command
         .spawn()
         .map_err(|e| msg::spawn_failed(lang, cmd_spec.bin, &e.to_string()))?;
+
+    // Le PID alimente le panneau de surveillance (CPU et mémoire de l'outil). Le
+    // suivi s'arrête tout seul à la fin de la fonction, quelle qu'en soit l'issue.
+    let _tracked = crate::monitor::TrackedProcess::new(child.id());
 
     if let (Some(secret), Some(mut stdin)) = (cmd_spec.stdin_input.clone(), child.stdin.take()) {
         stdin
@@ -205,6 +215,8 @@ mod tests {
             clean: false,
             gzip: false,
             exclude_tables: vec![],
+            destination_ids: vec![],
+            keep_local: true,
         }
     }
 

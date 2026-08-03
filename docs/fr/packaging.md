@@ -188,6 +188,36 @@ landing.
 
 ---
 
+## 6. Logo & icônes
+
+Tout découle d'un seul master vectoriel, `brand/logo.svg` (la marque seule, sans
+fond, tracée d'après l'original `brand/logodump.png`) :
+
+| Fichier                                 | Utilisé par                                                  |
+| --------------------------------------- | ------------------------------------------------------------ |
+| `brand/logo.svg`                        | Master. Mêmes tracés que le composant React `<Logo>`           |
+| `brand/logo-badge.svg`                  | Marque sur le fond de marque (carré, coins arrondis)           |
+| `brand/app-icon.png` (1024)             | Source donnée à `tauri icon`                                   |
+| `frontend/src/components/logo.tsx`      | La marque dans l'UI (SVG inline, net à toute taille)           |
+| `frontend/public/logo.svg`              | URL publique de la marque (`/logo.svg`)                        |
+| `frontend/src/app/favicon.ico`, `icon.svg`, `apple-icon.png` | Onglet du navigateur, écran d'accueil iOS |
+| `frontend/src/app/(en)/opengraph-image.png`, `(fr)/fr/…`     | Aperçu social, un par langue             |
+| `desktop/icons/*`                       | App de bureau (dock, barre des tâches, installeurs)            |
+
+Régénérer les icônes desktop après une modification du master :
+
+```bash
+npm --prefix desktop run tauri -- icon ../brand/app-icon.png
+rm -rf desktop/icons/android desktop/icons/ios   # pas de cible mobile ici
+```
+
+Les fichiers web sont de simples exports du même SVG (512 px pour le badge,
+180 px pour `apple-icon`, 1200×630 pour l'image sociale). Changer les couleurs
+demande de les changer dans `logo.tsx` **et** dans `brand/logo.svg` : les deux
+doivent rester identiques.
+
+---
+
 ## Récapitulatif express
 
 ```bash

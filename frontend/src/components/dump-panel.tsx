@@ -17,7 +17,14 @@ import { getBackend } from "@/lib/backend";
 import { ENGINES, suggestFileName } from "@/lib/engines";
 import { buildDumpCommand, formatCommand } from "@/lib/dump-command";
 import { useI18n } from "@/i18n/provider";
-import type { BinaryStatus, Connection, DumpFormat, DumpJob, DumpOptions } from "@/lib/types";
+import type {
+  BinaryStatus,
+  Connection,
+  DumpFormat,
+  DumpJob,
+  DumpOptions,
+  DumpProgress,
+} from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DumpProgressDialog } from "@/components/dump-progress-dialog";
+import { DestinationPicker } from "@/components/destination-picker";
 
 const emptySubscribe = () => () => {};
 
@@ -70,6 +78,8 @@ export function DumpPanel({
   const [clean, setClean] = useState(false);
   const [gzip, setGzip] = useState(false);
   const [excludeRaw, setExcludeRaw] = useState("");
+  const [destinationIds, setDestinationIds] = useState<string[]>([]);
+  const [keepLocal, setKeepLocal] = useState(true);
 
   const supportsDir = useSupportsDir(backend.isDesktop);
 
@@ -79,6 +89,7 @@ export function DumpPanel({
   const [lastJob, setLastJob] = useState<DumpJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [progress, setProgress] = useState<DumpProgress | null>(null);
 
   // Nom proposé (dérivé) sauf si l'utilisateur l'a saisi lui-même : garder une
   // valeur dérivée plutôt qu'un état miroir évite un effet de synchronisation.
@@ -117,8 +128,21 @@ export function DumpPanel({
         .split("\n")
         .map((s) => s.trim())
         .filter(Boolean),
+      destinationIds,
+      keepLocal,
     }),
-    [format, effectiveDestinationDir, fileName, schemaOnly, dataOnly, clean, gzip, excludeRaw],
+    [
+      format,
+      effectiveDestinationDir,
+      fileName,
+      schemaOnly,
+      dataOnly,
+      clean,
+      gzip,
+      excludeRaw,
+      destinationIds,
+      keepLocal,
+    ],
   );
 
   const preview = useMemo(
@@ -140,9 +164,13 @@ export function DumpPanel({
     setLog([]);
     setLastJob(null);
     setError(null);
+    setProgress(null);
     try {
-      const job = await backend.runDump(connection, options, (line) =>
-        setLog((l) => [...l, line]),
+      const job = await backend.runDump(
+        connection,
+        options,
+        (line) => setLog((l) => [...l, line]),
+        setProgress,
       );
       setLastJob(job);
       onJobDone(job);
@@ -313,6 +341,20 @@ export function DumpPanel({
                 className="font-mono text-xs"
               />
             </div>
+
+            {/* Copies supplémentaires : NAS, SFTP, S3… Le dossier ci-dessus
+                reste le point de départ, l'outil de dump y écrit toujours. */}
+            {supportsDir && (
+              <div className="grid gap-1.5 border-t pt-3">
+                <Label className="text-muted-foreground text-xs">{t.app.picker.title}</Label>
+                <DestinationPicker
+                  selected={destinationIds}
+                  onSelect={setDestinationIds}
+                  keepLocal={keepLocal}
+                  onKeepLocal={setKeepLocal}
+                />
+              </div>
+            )}
           </SectionCard>
 
           <SectionCard icon={FileCog} title={panel.format.title} hint={panel.format.hint}>
@@ -420,6 +462,7 @@ export function DumpPanel({
         connection={connection}
         isDesktop={backend.isDesktop}
         running={running}
+        progress={progress}
         log={log}
         error={error}
         job={lastJob}

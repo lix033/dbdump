@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Check, Database, FolderOpen } from "lucide-react";
 import { useI18n } from "@/i18n/provider";
+import { Logo } from "@/components/logo";
 
 /** Connexions factices de l'aperçu : de quoi montrer la liste multi-moteurs
  *  sans dépendre d'un vrai backend. */
@@ -75,7 +76,8 @@ export function AppPreview() {
           <span className="size-2.5 rounded-full bg-[oklch(0.82_0.14_85)]" />
           <span className="size-2.5 rounded-full bg-[oklch(0.75_0.15_150)]" />
         </span>
-        <span className="text-muted-foreground mx-auto text-xs font-medium">
+        <span className="text-muted-foreground mx-auto inline-flex items-center gap-1.5 text-xs font-medium">
+          <Logo className="size-3.5" />
           {t.common.appName}
         </span>
       </div>

@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { AppleIcon, WindowsIcon, LinuxIcon, GitHubIcon } from "@/components/os-icons";
+import { Logo } from "@/components/logo";
 import { AppPreview } from "@/components/app-preview";
 import { GITHUB_REPO, RELEASES_PAGE, REPO_URL } from "@/lib/site";
 import { useI18n } from "@/i18n/provider";
@@ -172,14 +173,7 @@ export function LandingPage() {
       >
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-6">
           <Link href="#top" className="group flex items-center gap-2.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/icon.png"
-              alt={t.common.appName}
-              className="size-9 transition-transform duration-300 group-hover:scale-110"
-              width={36}
-              height={36}
-            />
+            <Logo className="size-9 transition-transform duration-300 group-hover:scale-110" />
             <span className="font-heading text-lg font-extrabold tracking-tight">
               {t.common.appName}
             </span>
@@ -516,8 +510,7 @@ export function LandingPage() {
       <footer className="text-muted-foreground border-t px-6 py-10 text-sm">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icon.png" alt={t.common.appName} className="size-7" width={28} height={28} />
+            <Logo className="size-7" />
             <span className="font-heading text-foreground font-bold">{t.common.appName}</span>
           </div>
           <div className="flex flex-wrap items-center gap-5">

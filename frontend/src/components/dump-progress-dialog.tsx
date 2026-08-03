@@ -10,9 +10,9 @@ import {
   RotateCw,
   X,
 } from "lucide-react";
-import type { Connection, DumpJob } from "@/lib/types";
+import type { Connection, DumpJob, DumpProgress } from "@/lib/types";
 import { useI18n } from "@/i18n/provider";
-import { formatBytes } from "@/i18n/format";
+import { formatBytes, formatNumber } from "@/i18n/format";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,6 +25,31 @@ import { EngineAvatar } from "@/components/engine-avatar";
 
 type State = "running" | "success" | "error";
 
+/** Secondes restantes, ou `null` quand il n'y a pas de quoi les estimer : sans
+ *  dump précédent pour cette connexion, aucune référence de taille. Une valeur
+ *  inventée serait pire que pas de valeur. */
+function remaining(progress: DumpProgress): number | null {
+  if (!progress.expectedBytes || progress.bytesPerSecond <= 0) return null;
+  const left = progress.expectedBytes - progress.bytes;
+  if (left <= 0) return null;
+  return left / progress.bytesPerSecond;
+}
+
+/** « 45 s », « 3 min », « 1 h 12 » — la précision n'a pas d'intérêt au-delà. */
+function formatDelay(
+  seconds: number,
+  t: ReturnType<typeof useI18n>["t"],
+  locale: Parameters<typeof formatNumber>[1],
+): string {
+  const units = t.app.duration;
+  if (seconds < 90) return `${formatNumber(Math.round(seconds), locale)} s`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${formatNumber(minutes, locale)} ${units.minutes}`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return `${formatNumber(hours, locale)} ${units.hours} ${String(rest).padStart(2, "0")}`;
+}
+
 /** Fenêtre affichée pendant et après un dump : barre de progression, journal en
  *  direct, puis le résultat (fichier produit / erreur détaillée) avec les actions
  *  adaptées à la plateforme. */
@@ -34,6 +59,7 @@ export function DumpProgressDialog({
   connection,
   isDesktop,
   running,
+  progress,
   log,
   error,
   job,
@@ -48,6 +74,8 @@ export function DumpProgressDialog({
   connection: Connection;
   isDesktop: boolean;
   running: boolean;
+  /** Débit mesuré pendant l'écriture, quand le backend sait le fournir. */
+  progress: DumpProgress | null;
   log: string[];
   error: string | null;
   job: DumpJob | null;
@@ -107,6 +135,30 @@ export function DumpProgressDialog({
           )}
         </div>
 
+        {/* Pendant l'écriture : débit réel et temps restant estimé à partir de
+            la taille du dernier dump réussi de cette connexion. */}
+        {state === "running" && progress && (
+          <div className="text-muted-foreground flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs tabular-nums">
+            <span>
+              <span className="text-foreground font-medium">
+                {formatBytes(progress.bytes, t, locale)}
+              </span>{" "}
+              · {t.app.monitoring.speed}{" "}
+              <span className="text-foreground font-medium">
+                {formatBytes(progress.bytesPerSecond, t, locale)}/s
+              </span>
+            </span>
+            {remaining(progress) !== null && (
+              <span>
+                {t.app.monitoring.remaining}{" "}
+                <span className="text-foreground font-medium">
+                  {formatDelay(remaining(progress)!, t, locale)}
+                </span>
+              </span>
+            )}
+          </div>
+        )}
+
         {state === "success" && job && (
           <div className="border-success/30 bg-success/10 flex items-start gap-2.5 rounded-lg border px-3 py-2.5">
             <CircleCheck className="text-success mt-0.5 size-4 shrink-0" />
@@ -117,6 +169,39 @@ export function DumpProgressDialog({
               <p className="text-muted-foreground truncate font-mono text-xs">{job.outputPath}</p>
             </div>
           </div>
+        )}
+
+        {/* Verdict par destination : un envoi raté n'annule pas le dump, il doit
+            donc se voir à part du bandeau « écrit » ci-dessus. */}
+        {job && job.deliveries.length > 0 && (
+          <ul className="grid gap-1.5">
+            {job.deliveries.map((delivery) => (
+              <li
+                key={delivery.destinationId}
+                className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${
+                  delivery.ok
+                    ? "border-success/30 bg-success/8"
+                    : "border-destructive/30 bg-destructive/5"
+                }`}
+              >
+                {delivery.ok ? (
+                  <CircleCheck className="text-success mt-0.5 size-4 shrink-0" />
+                ) : (
+                  <AlertTriangle className="text-destructive mt-0.5 size-4 shrink-0" />
+                )}
+                <div className="min-w-0">
+                  <p className="font-medium">{delivery.destinationName}</p>
+                  <p
+                    className={`truncate text-xs ${
+                      delivery.ok ? "text-muted-foreground font-mono" : "text-destructive"
+                    }`}
+                  >
+                    {delivery.ok ? delivery.location : delivery.error}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
 
         {state === "error" && error && (

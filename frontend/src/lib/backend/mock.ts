@@ -1,11 +1,21 @@
 import { ENGINES } from "../engines";
+import { destinationConfig } from "../destinations";
+import { nextRun } from "../schedule";
 import type {
   BinaryStatus,
   Connection,
   ConnectionDraft,
+  Destination,
+  DestinationDraft,
   DumpJob,
   DumpOptions,
+  DumpProgress,
   EngineId,
+  FreeSpace,
+  Schedule,
+  ScheduleDraft,
+  ScheduleRun,
+  SystemStats,
   TestResult,
 } from "../types";
 import type { Backend } from "./types";
@@ -13,6 +23,9 @@ import { buildDemoDumpText } from "./demo-dump";
 import { currentDictionary } from "@/i18n/current";
 
 const STORE_KEY = "dbdump.connections";
+const SCHEDULES_KEY = "dbdump.schedules";
+const DESTINATIONS_KEY = "dbdump.destinations";
+const RUNS_KEY = "dbdump.schedule-runs";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -113,6 +126,7 @@ export class MockBackend implements Backend {
     conn: Connection,
     opts: DumpOptions,
     onProgress: (line: string) => void,
+    onStats?: (progress: DumpProgress) => void,
   ): Promise<DumpJob> {
     // Même id de job que côté desktop (l'id de connexion) : cancelDump() et le
     // bouton « Télécharger » ciblent ainsi le bon job.
@@ -137,10 +151,16 @@ export class MockBackend implements Backend {
         .map((table) => t.dumpingTable(table)),
       t.writingIndexes,
     ];
-    for (const s of steps) {
+    for (const [index, s] of steps.entries()) {
       if (this.cancelled.has(id)) throw new Error(t.cancelled);
       await sleep(400);
       emit(s);
+      // Débit simulé : de quoi voir vivre l'affichage de progression en démo.
+      onStats?.({
+        bytes: (index + 1) * 320_000,
+        bytesPerSecond: 780_000,
+        expectedBytes: steps.length * 320_000,
+      });
     }
 
     // Produit un vrai fichier : contenu cohérent avec les options, écrit dans le
@@ -180,6 +200,7 @@ export class MockBackend implements Backend {
       outputPath,
       sizeBytes: blob.size,
       log,
+      deliveries: [],
     };
   }
 
@@ -236,5 +257,218 @@ export class MockBackend implements Backend {
 
   async revealInFolder(path: string): Promise<void> {
     console.info("[mock] reveal in file manager:", path);
+  }
+
+  // ── Programmations ─────────────────────────────────────────────────────────
+  // Le mode démo enregistre et affiche les programmations (calendrier compris,
+  // via le miroir TS de `schedule.rs`) mais ne les déclenche **jamais** tout
+  // seul : une page web qui se met à télécharger des fichiers d'elle-même serait
+  // une mauvaise surprise. Seul « Exécuter maintenant » produit une exécution.
+
+  private scheduleListeners = new Set<() => void>();
+
+  private notifySchedules(): void {
+    for (const listener of this.scheduleListeners) listener();
+  }
+
+  private read<T>(key: string): T[] {
+    if (typeof window === "undefined") return [];
+    try {
+      return JSON.parse(window.localStorage.getItem(key) ?? "[]") as T[];
+    } catch {
+      return [];
+    }
+  }
+
+  private write<T>(key: string, value: T[]): void {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  async listSchedules(): Promise<Schedule[]> {
+    // L'échéance est recalculée à la lecture : sans ordonnanceur, c'est le seul
+    // moment où elle peut rester juste.
+    return this.read<Schedule>(SCHEDULES_KEY).map((s) => ({
+      ...s,
+      nextRunAt: s.enabled ? (nextRun(s.trigger)?.toISOString() ?? undefined) : undefined,
+    }));
+  }
+
+  async saveSchedule(draft: ScheduleDraft, id?: string): Promise<Schedule> {
+    const all = this.read<Schedule>(SCHEDULES_KEY);
+    const previous = all.find((s) => s.id === id);
+    const schedule: Schedule = {
+      ...draft,
+      id: id ?? crypto.randomUUID(),
+      createdAt: previous?.createdAt ?? new Date().toISOString(),
+      lastRunAt: previous?.lastRunAt,
+      lastStatus: previous?.lastStatus,
+      nextRunAt: draft.enabled ? (nextRun(draft.trigger)?.toISOString() ?? undefined) : undefined,
+    };
+    this.write(SCHEDULES_KEY, id ? all.map((s) => (s.id === id ? schedule : s)) : [...all, schedule]);
+    this.notifySchedules();
+    return schedule;
+  }
+
+  async deleteSchedule(id: string): Promise<void> {
+    this.write(
+      SCHEDULES_KEY,
+      this.read<Schedule>(SCHEDULES_KEY).filter((s) => s.id !== id),
+    );
+    this.notifySchedules();
+  }
+
+  async setScheduleEnabled(id: string, enabled: boolean): Promise<Schedule> {
+    const all = this.read<Schedule>(SCHEDULES_KEY);
+    const schedule = all.find((s) => s.id === id);
+    if (!schedule) throw new Error(currentDictionary().mock.scheduleMissing);
+    const updated: Schedule = {
+      ...schedule,
+      enabled,
+      nextRunAt: enabled ? (nextRun(schedule.trigger)?.toISOString() ?? undefined) : undefined,
+    };
+    this.write(
+      SCHEDULES_KEY,
+      all.map((s) => (s.id === id ? updated : s)),
+    );
+    this.notifySchedules();
+    return updated;
+  }
+
+  async runScheduleNow(id: string): Promise<void> {
+    const all = this.read<Schedule>(SCHEDULES_KEY);
+    const schedule = all.find((s) => s.id === id);
+    if (!schedule) throw new Error(currentDictionary().mock.scheduleMissing);
+    const connection = (await this.loadConnections()).find((c) => c.id === schedule.connectionId);
+
+    const startedAt = new Date().toISOString();
+    const run: ScheduleRun = {
+      id: crypto.randomUUID(),
+      scheduleId: schedule.id,
+      scheduleName: schedule.name,
+      connectionName: connection?.name ?? "",
+      startedAt,
+      status: "running",
+      caughtUp: false,
+    };
+    this.write(RUNS_KEY, [run, ...this.read<ScheduleRun>(RUNS_KEY)].slice(0, 200));
+    this.notifySchedules();
+
+    await sleep(1200);
+    const done: ScheduleRun = connection
+      ? {
+          ...run,
+          status: "success",
+          finishedAt: new Date().toISOString(),
+          outputPath: `${schedule.options.destinationDir}/${schedule.options.fileName}`,
+          sizeBytes: 2_400_000 + Math.floor(Math.random() * 800_000),
+        }
+      : {
+          ...run,
+          status: "failed",
+          finishedAt: new Date().toISOString(),
+          error: currentDictionary().mock.scheduleConnectionMissing,
+        };
+
+    this.write(
+      RUNS_KEY,
+      this.read<ScheduleRun>(RUNS_KEY).map((r) => (r.id === run.id ? done : r)),
+    );
+    this.write(
+      SCHEDULES_KEY,
+      this.read<Schedule>(SCHEDULES_KEY).map((s) =>
+        s.id === id ? { ...s, lastRunAt: startedAt, lastStatus: done.status } : s,
+      ),
+    );
+    this.notifySchedules();
+  }
+
+  async listScheduleRuns(): Promise<ScheduleRun[]> {
+    return this.read<ScheduleRun>(RUNS_KEY);
+  }
+
+  onSchedulesChanged(listener: () => void): () => void {
+    this.scheduleListeners.add(listener);
+    return () => this.scheduleListeners.delete(listener);
+  }
+
+  async isAutostartEnabled(): Promise<boolean> {
+    // Une page web ne se lance pas au démarrage : l'UI masque l'option hors desktop.
+    return false;
+  }
+
+  async setAutostart(): Promise<void> {
+    throw new Error(currentDictionary().mock.unavailableOnWeb);
+  }
+
+  // ── Destinations ───────────────────────────────────────────────────────────
+  // Enregistrées et affichées comme sur desktop, mais rien n'est jamais envoyé :
+  // un navigateur ne parle ni SFTP, ni FTP, et n'a pas de disque à écrire.
+
+  async listDestinations(): Promise<Destination[]> {
+    return this.read<Destination>(DESTINATIONS_KEY);
+  }
+
+  async saveDestination(draft: DestinationDraft, id?: string): Promise<Destination> {
+    const all = this.read<Destination>(DESTINATIONS_KEY);
+    // Le secret n'est délibérément pas conservé : côté desktop il va au coffre
+    // chiffré, jamais dans ce store.
+    const destination: Destination = {
+      ...destinationConfig(draft),
+      name: draft.name,
+      id: id ?? crypto.randomUUID(),
+      createdAt: all.find((d) => d.id === id)?.createdAt ?? new Date().toISOString(),
+    };
+    this.write(
+      DESTINATIONS_KEY,
+      id ? all.map((d) => (d.id === id ? destination : d)) : [...all, destination],
+    );
+    return destination;
+  }
+
+  async deleteDestination(id: string): Promise<void> {
+    this.write(
+      DESTINATIONS_KEY,
+      this.read<Destination>(DESTINATIONS_KEY).filter((d) => d.id !== id),
+    );
+  }
+
+  async testDestination(draft: DestinationDraft): Promise<TestResult> {
+    const t = currentDictionary().mock;
+    await sleep(600);
+    if (draft.kind === "folder") {
+      return { ok: false, message: t.unavailableOnWeb };
+    }
+    // Assez de validation pour que le formulaire se comporte comme en vrai.
+    if (draft.kind === "s3") {
+      if (!draft.bucket) return { ok: false, message: t.missingBucket };
+    } else if (!draft.host) {
+      return { ok: false, message: t.missingHost };
+    }
+    return { ok: true, message: t.destinationReady, latencyMs: 38 };
+  }
+
+  async destinationSpace(): Promise<FreeSpace | null> {
+    return null;
+  }
+
+  async systemStats(): Promise<SystemStats> {
+    // Valeurs plausibles et stables : la démo montre la forme de l'écran, sans
+    // prétendre mesurer la machine du visiteur (le navigateur ne le peut pas).
+    return {
+      cpuPercent: 18 + Math.random() * 12,
+      memoryUsedBytes: 9_400_000_000,
+      memoryTotalBytes: 17_179_869_184,
+      dumpCpuPercent: 0,
+      dumpMemoryBytes: 0,
+      activeDumps: 0,
+      volumes: [
+        {
+          name: "Macintosh HD",
+          mountPoint: "/",
+          freeBytes: 214_000_000_000,
+          totalBytes: 494_384_795_648,
+        },
+      ],
+    };
   }
 }

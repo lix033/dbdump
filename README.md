@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="brand/logo-512.png" alt="" width="92" height="92">
+</p>
+
 # DBDump
 
 **English** · [Français](README.fr.md)
@@ -33,6 +37,17 @@ leaves your machine, no server to install.
   Nothing to configure.
 - Saved connections (encrypted), **connection test**, and a **live log** while
   the backup runs.
+- **Scheduled backups**: every few hours, daily, on chosen weekdays, on a day of
+  the month, or once at a given date. DBDump runs them in the background (menu
+  bar icon, optional launch at login) and catches up a run missed while it was
+  closed. Optional retention: keep only the last N backups.
+- **Multiple destinations**, in parallel: local folder, external drive, NAS or
+  network share, **SFTP**, **FTP/FTPS**, and **S3-compatible** storage (Amazon
+  S3, MinIO, Cloudflare R2). One dump, several copies — with the option of
+  deleting the local file once a destination has confirmed.
+- **Monitoring**: free space on every volume and every destination, CPU and
+  memory of the machine and of the dump tools, write speed and estimated time
+  remaining while a backup runs.
 - Available on **macOS** (Apple Silicon & Intel), **Windows** and **Linux**.
 - Interface and messages in **English and French**.
 
@@ -116,6 +131,13 @@ missing** and how to install them on your system.
   vault (`~/.dbdump/secrets.enc`); the connections file (`connections.enc`) is
   encrypted the same way. The local key (`~/.dbdump/secrets.key`, `0600`
   permissions) never leaves the machine.
+
+- **Destination credentials** (SFTP/FTP passwords, key passphrases, S3 secret
+  keys) live in that same vault, never in the configuration files.
+- **SSH host keys are verified.** An SFTP destination whose host is not already
+  in your `~/.ssh/known_hosts` is refused, with the fingerprint shown: accepting
+  any key would hand your backups to anyone able to sit on the network. Run
+  `ssh user@host` once, check the fingerprint, and DBDump will connect.
 
   > **A deliberate trade-off.** DBDump does not use the system keychain
   > (Keychain, Credential Manager, Secret Service): without a stable signing

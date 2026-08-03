@@ -203,6 +203,208 @@ pub mod msg {
     pub fn invalid_path(lang: Lang) -> &'static str {
         lang.pick("invalid path", "chemin invalide")
     }
+
+    // ── Destinations ─────────────────────────────────────────────────────────
+
+    pub fn destination_unavailable(lang: Lang, path: &str) -> String {
+        match lang {
+            Lang::En => format!(
+                "Destination unavailable: {path}\n(external drive unplugged or network share not mounted?)"
+            ),
+            Lang::Fr => format!(
+                "Destination indisponible : {path}\n(disque externe débranché ou partage réseau non monté ?)"
+            ),
+        }
+    }
+
+    pub fn destination_ready(lang: Lang) -> &'static str {
+        lang.pick("Destination reachable and writable", "Destination joignable et inscriptible")
+    }
+
+    pub fn destination_ready_with_space(lang: Lang, free_bytes: u64) -> String {
+        let gb = free_bytes as f64 / 1_073_741_824.0;
+        match lang {
+            Lang::En => format!("Destination reachable and writable · {gb:.1} GB free"),
+            Lang::Fr => format!("Destination joignable et inscriptible · {gb:.1} Go libres"),
+        }
+    }
+
+    pub fn not_writable(lang: Lang, cause: &str) -> String {
+        match lang {
+            Lang::En => format!("Destination is not writable: {cause}"),
+            Lang::Fr => format!("Destination non inscriptible : {cause}"),
+        }
+    }
+
+    pub fn copy_failed(lang: Lang, cause: &str) -> String {
+        match lang {
+            Lang::En => format!("copy failed: {cause}"),
+            Lang::Fr => format!("copie impossible : {cause}"),
+        }
+    }
+
+    pub fn connect_failed(lang: Lang, address: &str, cause: &str) -> String {
+        match lang {
+            Lang::En => format!("could not connect to {address}: {cause}"),
+            Lang::Fr => format!("connexion à {address} impossible : {cause}"),
+        }
+    }
+
+    pub fn auth_failed(lang: Lang, cause: &str) -> String {
+        match lang {
+            Lang::En => format!("authentication refused: {cause}"),
+            Lang::Fr => format!("authentification refusée : {cause}"),
+        }
+    }
+
+    pub fn tls_failed(lang: Lang, cause: &str) -> String {
+        match lang {
+            Lang::En => format!("TLS negotiation failed: {cause}"),
+            Lang::Fr => format!("négociation TLS impossible : {cause}"),
+        }
+    }
+
+    pub fn remote_dir_missing(lang: Lang, dir: &str, cause: &str) -> String {
+        match lang {
+            Lang::En => format!("remote folder unreachable ({dir}): {cause}"),
+            Lang::Fr => format!("dossier distant inaccessible ({dir}) : {cause}"),
+        }
+    }
+
+    pub fn remote_write_failed(lang: Lang, path: &str, cause: &str) -> String {
+        match lang {
+            Lang::En => format!("could not write {path}: {cause}"),
+            Lang::Fr => format!("écriture de {path} impossible : {cause}"),
+        }
+    }
+
+    pub fn archive_failed(lang: Lang, cause: &str) -> String {
+        match lang {
+            Lang::En => format!("could not archive the dump folder: {cause}"),
+            Lang::Fr => format!("archivage du dossier de dump impossible : {cause}"),
+        }
+    }
+
+    pub fn delivery_start(lang: Lang, name: &str) -> String {
+        match lang {
+            Lang::En => format!("→ {name}: sending…"),
+            Lang::Fr => format!("→ {name} : envoi…"),
+        }
+    }
+
+    pub fn delivery_done(lang: Lang, name: &str, bytes: u64, millis: u64) -> String {
+        let mb = bytes as f64 / 1_048_576.0;
+        let seconds = millis as f64 / 1000.0;
+        // Le débit n'a de sens qu'au-delà de quelques dixièmes de seconde.
+        let rate = if seconds > 0.2 {
+            format!(" ({:.1} MB/s)", mb / seconds)
+        } else {
+            String::new()
+        };
+        match lang {
+            Lang::En => format!("✓ {name}: {mb:.1} MB in {seconds:.1} s{rate}"),
+            Lang::Fr => format!("✓ {name} : {mb:.1} Mo en {seconds:.1} s{rate}"),
+        }
+    }
+
+    pub fn delivery_failed(lang: Lang, name: &str, cause: &str) -> String {
+        match lang {
+            Lang::En => format!("✗ {name}: {cause}"),
+            Lang::Fr => format!("✗ {name} : {cause}"),
+        }
+    }
+
+    pub fn local_copy_removed(lang: Lang, path: &str) -> String {
+        match lang {
+            Lang::En => format!("local copy removed ({path})"),
+            Lang::Fr => format!("copie locale supprimée ({path})"),
+        }
+    }
+
+    pub fn local_copy_kept(lang: Lang) -> &'static str {
+        lang.pick(
+            "local copy kept: no destination confirmed the transfer",
+            "copie locale conservée : aucune destination n'a confirmé le transfert",
+        )
+    }
+
+    pub fn s3_config_invalid(lang: Lang, cause: &str) -> String {
+        match lang {
+            Lang::En => format!("invalid S3 configuration: {cause}"),
+            Lang::Fr => format!("configuration S3 invalide : {cause}"),
+        }
+    }
+
+    // Clé d'hôte SSH : ces messages disent quoi faire, pas seulement ce qui ne
+    // va pas — c'est le seul endroit où l'utilisateur peut trancher.
+
+    pub fn host_key_unknown(lang: Lang, host: &str) -> String {
+        match lang {
+            Lang::En => format!("could not read the host key of {host}"),
+            Lang::Fr => format!("clé d'hôte de {host} illisible"),
+        }
+    }
+
+    pub fn host_key_unknown_hint(lang: Lang, host: &str, user: &str, fingerprint: &str) -> String {
+        match lang {
+            Lang::En => format!(
+                "Unknown host {host} ({fingerprint}).\nDBDump refuses to trust it blindly: run `ssh {user}@{host}` once, check the fingerprint, accept it — then try again."
+            ),
+            Lang::Fr => format!(
+                "Hôte {host} inconnu ({fingerprint}).\nDBDump refuse de lui faire confiance à l'aveugle : lancez une fois `ssh {user}@{host}`, vérifiez l'empreinte, acceptez-la — puis réessayez."
+            ),
+        }
+    }
+
+    pub fn host_key_mismatch(lang: Lang, host: &str, fingerprint: &str) -> String {
+        match lang {
+            Lang::En => format!(
+                "The host key of {host} has CHANGED ({fingerprint}).\nEither the server was reinstalled, or someone is intercepting the connection. Nothing was sent."
+            ),
+            Lang::Fr => format!(
+                "La clé d'hôte de {host} a CHANGÉ ({fingerprint}).\nSoit le serveur a été réinstallé, soit quelqu'un intercepte la connexion. Rien n'a été envoyé."
+            ),
+        }
+    }
+
+    // ── Icône de la barre de menus ───────────────────────────────────────────
+
+    pub fn tray_show(lang: Lang) -> &'static str {
+        lang.pick("Open DBDump", "Ouvrir DBDump")
+    }
+
+    pub fn tray_quit(lang: Lang) -> &'static str {
+        lang.pick("Quit", "Quitter")
+    }
+
+    pub fn tray_tooltip(lang: Lang) -> &'static str {
+        lang.pick(
+            "DBDump — scheduled backups keep running",
+            "DBDump — les sauvegardes programmées continuent",
+        )
+    }
+
+    // ── Programmations ───────────────────────────────────────────────────────
+
+    pub fn schedule_connection_missing(lang: Lang) -> &'static str {
+        lang.pick(
+            "The connection this schedule points at no longer exists.",
+            "La connexion visée par cette programmation n'existe plus.",
+        )
+    }
+
+    /// Un disque externe débranché ou un partage réseau non monté : recréer le
+    /// dossier écrirait en douce sur le disque interne, autant le dire.
+    pub fn schedule_destination_missing(lang: Lang, path: &str) -> String {
+        match lang {
+            Lang::En => format!(
+                "Destination folder unavailable: {path}\n(external drive unplugged or network share not mounted?)"
+            ),
+            Lang::Fr => format!(
+                "Dossier de destination indisponible : {path}\n(disque externe débranché ou partage réseau non monté ?)"
+            ),
+        }
+    }
 }
 
 #[cfg(test)]

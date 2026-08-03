@@ -6,9 +6,12 @@ use tauri::{ipc::Channel, Manager, State};
 use tokio::process::Command;
 use tokio::sync::oneshot;
 
+use crate::destinations::{DeliveryResult, Destination, DestinationKind};
 use crate::engines::{Connection, DumpOptions, EngineId, SslMode};
 use crate::i18n::{msg, Lang};
 use crate::runner::execute_dump;
+use crate::schedule::{Schedule, ScheduleRun, Trigger};
+use crate::scheduler::Scheduler;
 use crate::{secrets, store};
 
 /// Jobs en cours, pour pouvoir les annuler depuis l'UI.
@@ -63,6 +66,9 @@ pub struct ConnectionDraft {
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum DumpEvent {
     Log { line: String },
+    /// Avancement mesuré sur le fichier de sortie : débit d'écriture et,
+    /// quand une référence existe, taille attendue.
+    Progress(crate::monitor::DumpProgress),
 }
 
 /// Résultat d'un dump réussi, renvoyé directement à l'UI.
@@ -71,6 +77,8 @@ pub enum DumpEvent {
 pub struct DumpDone {
     size_bytes: u64,
     output_path: String,
+    /// Verdict de chaque destination. Vide quand le dump reste sur le disque.
+    deliveries: Vec<DeliveryResult>,
 }
 
 fn read_version(path: &std::path::Path) -> Option<String> {
@@ -251,6 +259,25 @@ pub async fn run_dump(
     let (cancel_tx, cancel_rx) = oneshot::channel();
     jobs.0.lock().unwrap().insert(job_id.clone(), cancel_tx);
 
+    // Surveillance de l'écriture : une tâche regarde le fichier grossir pendant
+    // que l'outil travaille, et pousse débit et taille attendue à l'UI. Elle
+    // s'arrête d'elle-même quand le canal se ferme, à la fin du dump.
+    let config_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let watcher_channel = on_event.clone();
+    let watched_path = crate::runner::output_path(&opts);
+    let expected = crate::monitor::expected_size(&config_dir, &conn.id);
+    let watcher = tauri::async_runtime::spawn(async move {
+        let mut watcher = crate::monitor::ProgressWatcher::new(watched_path, expected);
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(700)).await;
+            if let Some(progress) = watcher.tick() {
+                if watcher_channel.send(DumpEvent::Progress(progress)).is_err() {
+                    return;
+                }
+            }
+        }
+    });
+
     let result = execute_dump(
         &conn,
         &opts,
@@ -267,13 +294,160 @@ pub async fn run_dump(
     .await;
 
     jobs.0.lock().unwrap().remove(&job_id);
+    watcher.abort();
 
-    // Ok(outcome) → l'UI reçoit la taille réelle par la valeur de retour ;
     // Err(error) → `invoke` rejette avec la cause détaillée (stderr inclus).
-    result.map(|outcome| DumpDone {
+    let outcome = result?;
+
+    // Référence pour le temps restant du prochain dump de cette connexion.
+    crate::monitor::remember_size(&config_dir, &conn.id, outcome.size_bytes);
+
+    // Diffusion vers les destinations : après le dump, jamais à sa place. Un
+    // envoi qui échoue laisse le fichier local et se voit dans le journal.
+    let deliveries = crate::delivery::run(&app, &opts, &outcome.output_path, lang, |line| {
+        let _ = on_event.send(DumpEvent::Log { line });
+    })
+    .await;
+
+    Ok(DumpDone {
         size_bytes: outcome.size_bytes,
         output_path: outcome.output_path,
+        deliveries,
     })
+}
+
+// ── Destinations ─────────────────────────────────────────────────────────────
+
+/// Ce que le formulaire envoie. Le secret (mot de passe, phrase de passe, clé
+/// secrète S3) transite ici puis part au coffre : il n'est jamais renvoyé à l'UI.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DestinationDraft {
+    pub name: String,
+    #[serde(flatten)]
+    pub kind: DestinationKind,
+    #[serde(default)]
+    pub secret: String,
+}
+
+#[tauri::command]
+pub fn load_destinations(app: tauri::AppHandle) -> Result<Vec<Destination>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    store::load(&dir, store::DESTINATIONS)
+}
+
+#[tauri::command]
+pub fn save_destination(
+    app: tauri::AppHandle,
+    draft: DestinationDraft,
+    id: Option<String>,
+) -> Result<Destination, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let mut all: Vec<Destination> = store::load(&dir, store::DESTINATIONS)?;
+    let existing = id.as_ref().and_then(|i| all.iter().find(|d| &d.id == i).cloned());
+
+    let destination = Destination {
+        id: id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+        name: draft.name,
+        kind: draft.kind,
+        created_at: existing
+            .map(|d| d.created_at)
+            .unwrap_or_else(|| chrono::Local::now().to_rfc3339()),
+    };
+
+    // Un secret vide à l'édition veut dire « garder celui du coffre ».
+    if !draft.secret.is_empty() {
+        secrets::set_destination_secret(&destination.id, &draft.secret)?;
+    }
+
+    match all.iter_mut().find(|d| d.id == destination.id) {
+        Some(slot) => *slot = destination.clone(),
+        None => all.push(destination.clone()),
+    }
+    store::save(&dir, store::DESTINATIONS, &all)?;
+    Ok(destination)
+}
+
+#[tauri::command]
+pub fn delete_destination(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let all: Vec<Destination> = store::load::<Vec<Destination>>(&dir, store::DESTINATIONS)?
+        .into_iter()
+        .filter(|d| d.id != id)
+        .collect();
+    store::save(&dir, store::DESTINATIONS, &all)?;
+    secrets::delete_destination_secret(&id)?;
+
+    // Une programmation qui visait cette destination ne doit pas continuer à
+    // croire qu'elle y envoie quelque chose.
+    let mut schedules: Vec<Schedule> = store::load(&dir, store::SCHEDULES)?;
+    let mut touched = false;
+    for schedule in schedules.iter_mut() {
+        let before = schedule.options.destination_ids.len();
+        schedule.options.destination_ids.retain(|d| d != &id);
+        touched |= schedule.options.destination_ids.len() != before;
+    }
+    if touched {
+        store::save(&dir, store::SCHEDULES, &schedules)?;
+    }
+    Ok(())
+}
+
+/// Vérifie qu'une destination répond **et** qu'on peut y écrire : lister ne
+/// prouve rien, beaucoup de comptes ont l'un sans l'autre.
+///
+/// Le brouillon est testé tel quel (sans enregistrement), avec le secret déjà
+/// au coffre quand le champ est laissé vide à l'édition.
+#[tauri::command]
+pub async fn test_destination(
+    draft: DestinationDraft,
+    id: Option<String>,
+    lang: Lang,
+) -> TestResult {
+    let started = std::time::Instant::now();
+    let probe_id = id.unwrap_or_else(|| format!("probe-{}", uuid::Uuid::new_v4()));
+
+    // Le test doit pouvoir tourner avant tout enregistrement : le secret saisi
+    // est donc déposé au coffre sous l'identifiant visé, comme le ferait
+    // l'enregistrement. Pour un brouillon neuf, l'entrée est retirée juste après.
+    let temporary = draft.secret.is_empty();
+    if !temporary {
+        if let Err(error) = secrets::set_destination_secret(&probe_id, &draft.secret) {
+            return TestResult {
+                ok: false,
+                message: error,
+                server_version: None,
+                latency_ms: None,
+            };
+        }
+    }
+
+    let destination = Destination {
+        id: probe_id.clone(),
+        name: draft.name,
+        kind: draft.kind,
+        created_at: String::new(),
+    };
+    let outcome = crate::destinations::test(&destination, lang).await;
+
+    if probe_id.starts_with("probe-") {
+        let _ = secrets::delete_destination_secret(&probe_id);
+    }
+
+    match outcome {
+        Ok(message) => TestResult {
+            ok: true,
+            message,
+            server_version: None,
+            latency_ms: Some(started.elapsed().as_millis() as u64),
+        },
+        Err(message) => TestResult {
+            ok: false,
+            message,
+            server_version: None,
+            latency_ms: None,
+        },
+    }
 }
 
 /// Copie le fichier produit vers le dossier Téléchargements de l'OS. Utile quand
@@ -328,7 +502,7 @@ pub fn cancel_dump(job_id: String, jobs: State<'_, Jobs>) {
 #[tauri::command]
 pub fn load_connections(app: tauri::AppHandle) -> Result<Vec<Connection>, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    store::load(&dir)
+    store::load(&dir, store::CONNECTIONS)
 }
 
 #[tauri::command]
@@ -338,7 +512,7 @@ pub fn save_connection(
     id: Option<String>,
 ) -> Result<Connection, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    let mut all = store::load(&dir)?;
+    let mut all: Vec<Connection> = store::load(&dir, store::CONNECTIONS)?;
 
     let existing = id.as_ref().and_then(|i| all.iter().find(|c| &c.id == i).cloned());
     let conn = Connection {
@@ -365,18 +539,221 @@ pub fn save_connection(
         Some(slot) => *slot = conn.clone(),
         None => all.push(conn.clone()),
     }
-    store::save(&dir, &all)?;
+    store::save(&dir, store::CONNECTIONS, &all)?;
     Ok(conn)
 }
 
 #[tauri::command]
 pub fn delete_connection(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    let all: Vec<Connection> = store::load(&dir)?.into_iter().filter(|c| c.id != id).collect();
-    store::save(&dir, &all)?;
+    let all: Vec<Connection> = store::load::<Vec<Connection>>(&dir, store::CONNECTIONS)?
+        .into_iter()
+        .filter(|c| c.id != id)
+        .collect();
+    store::save(&dir, store::CONNECTIONS, &all)?;
     // Sans ça le mot de passe resterait orphelin dans le trousseau.
     secrets::delete_password(&id)?;
+
+    // Une programmation qui vise une connexion supprimée n'a plus de sens : on la
+    // désactive plutôt que de la laisser échouer toutes les nuits.
+    let mut schedules: Vec<crate::schedule::Schedule> = store::load(&dir, store::SCHEDULES)?;
+    let mut touched = false;
+    for schedule in schedules.iter_mut().filter(|s| s.connection_id == id) {
+        schedule.enabled = false;
+        schedule.next_run_at = None;
+        touched = true;
+    }
+    if touched {
+        store::save(&dir, store::SCHEDULES, &schedules)?;
+    }
     Ok(())
+}
+
+// ── Programmations ───────────────────────────────────────────────────────────
+
+/// Ce que le formulaire envoie : tout sauf ce que le backend calcule lui-même
+/// (identifiant, dates d'exécution, statut).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleDraft {
+    pub name: String,
+    pub connection_id: String,
+    pub options: DumpOptions,
+    pub trigger: Trigger,
+    pub enabled: bool,
+    #[serde(default)]
+    pub keep_last: u32,
+}
+
+/// Chaque commande de programmation transporte la langue de l'UI : c'est la
+/// seule occasion qu'a l'ordonnanceur de la connaître, ses exécutions de fond
+/// n'ayant personne à qui la demander.
+#[tauri::command]
+pub fn load_schedules(
+    app: tauri::AppHandle,
+    lang: Lang,
+    scheduler: State<'_, Scheduler>,
+) -> Result<Vec<Schedule>, String> {
+    scheduler.remember_lang(lang);
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    store::load(&dir, store::SCHEDULES)
+}
+
+#[tauri::command]
+pub fn save_schedule(
+    app: tauri::AppHandle,
+    draft: ScheduleDraft,
+    id: Option<String>,
+    lang: Lang,
+    scheduler: State<'_, Scheduler>,
+) -> Result<Schedule, String> {
+    scheduler.remember_lang(lang);
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let mut all: Vec<Schedule> = store::load(&dir, store::SCHEDULES)?;
+    let existing = id.as_ref().and_then(|i| all.iter().find(|s| &s.id == i).cloned());
+    let now = chrono::Local::now();
+
+    let schedule = Schedule {
+        id: id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+        name: draft.name,
+        connection_id: draft.connection_id,
+        options: draft.options,
+        // Recalculé à chaque enregistrement : changer l'heure doit décaler la
+        // prochaine exécution tout de suite, pas au prochain déclenchement.
+        next_run_at: draft
+            .enabled
+            .then(|| crate::schedule::next_after(&draft.trigger, now))
+            .flatten()
+            .map(|d| d.to_rfc3339()),
+        trigger: draft.trigger,
+        enabled: draft.enabled,
+        created_at: existing
+            .as_ref()
+            .map(|s| s.created_at.clone())
+            .unwrap_or_else(|| now.to_rfc3339()),
+        last_run_at: existing.as_ref().and_then(|s| s.last_run_at.clone()),
+        last_status: existing.as_ref().and_then(|s| s.last_status),
+        keep_last: draft.keep_last,
+    };
+
+    match all.iter_mut().find(|s| s.id == schedule.id) {
+        Some(slot) => *slot = schedule.clone(),
+        None => all.push(schedule.clone()),
+    }
+    store::save(&dir, store::SCHEDULES, &all)?;
+    Ok(schedule)
+}
+
+#[tauri::command]
+pub fn delete_schedule(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let all: Vec<Schedule> = store::load::<Vec<Schedule>>(&dir, store::SCHEDULES)?
+        .into_iter()
+        .filter(|s| s.id != id)
+        .collect();
+    store::save(&dir, store::SCHEDULES, &all)?;
+    // L'historique reste : il documente des fichiers qui, eux, existent toujours.
+    Ok(())
+}
+
+/// Active ou suspend une programmation. Réactiver recalcule l'échéance depuis
+/// maintenant : une programmation reprise ne part pas en rattrapage immédiat.
+#[tauri::command]
+pub fn set_schedule_enabled(
+    app: tauri::AppHandle,
+    id: String,
+    enabled: bool,
+) -> Result<Schedule, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let mut all: Vec<Schedule> = store::load(&dir, store::SCHEDULES)?;
+    let slot = all
+        .iter_mut()
+        .find(|s| s.id == id)
+        .ok_or_else(|| "schedule not found".to_string())?;
+
+    slot.enabled = enabled;
+    slot.next_run_at = enabled
+        .then(|| crate::schedule::next_after(&slot.trigger, chrono::Local::now()))
+        .flatten()
+        .map(|d| d.to_rfc3339());
+    let updated = slot.clone();
+    store::save(&dir, store::SCHEDULES, &all)?;
+    Ok(updated)
+}
+
+/// Exécute une programmation sur-le-champ, sans toucher à son calendrier au-delà
+/// du report normal. Rend la main immédiatement : l'UI suit via l'événement de
+/// changement, comme pour une exécution déclenchée par l'horloge.
+#[tauri::command]
+pub fn run_schedule_now(
+    app: tauri::AppHandle,
+    id: String,
+    lang: Lang,
+    scheduler: State<'_, Scheduler>,
+) -> Result<(), String> {
+    scheduler.remember_lang(lang);
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let all: Vec<Schedule> = store::load(&dir, store::SCHEDULES)?;
+    let schedule = all
+        .into_iter()
+        .find(|s| s.id == id)
+        .ok_or_else(|| "schedule not found".to_string())?;
+
+    tauri::async_runtime::spawn(async move {
+        crate::scheduler::run(app, schedule, false).await;
+    });
+    Ok(())
+}
+
+/// Photographie de la machine : CPU, mémoire, volumes, et ce que consomment les
+/// dumps en cours. L'UI l'appelle à intervalle régulier tant que l'écran de
+/// surveillance est ouvert.
+#[tauri::command]
+pub async fn system_stats() -> crate::monitor::SystemStats {
+    // `snapshot` dort brièvement (mesure du CPU) : hors du fil de l'UI.
+    tokio::task::spawn_blocking(crate::monitor::snapshot)
+        .await
+        .unwrap_or_else(|_| crate::monitor::snapshot())
+}
+
+/// Espace libre d'une destination, quand la question a un sens (dossier, SFTP).
+/// `None` pour FTP et S3. Sert au tableau de bord de surveillance.
+#[tauri::command]
+pub async fn destination_space(
+    app: tauri::AppHandle,
+    id: String,
+) -> Result<Option<crate::destinations::FreeSpace>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let all: Vec<Destination> = store::load(&dir, store::DESTINATIONS)?;
+    let Some(destination) = all.into_iter().find(|d| d.id == id) else {
+        return Ok(None);
+    };
+    Ok(crate::destinations::free_space(&destination).await)
+}
+
+/// « Lancer DBDump au démarrage ». Sans ça, une programmation nocturne ne part
+/// que si quelqu'un a pensé à ouvrir l'app avant d'aller se coucher.
+#[tauri::command]
+pub fn autostart_enabled(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let manager = app.autolaunch();
+    if enabled {
+        manager.enable().map_err(|e| e.to_string())
+    } else {
+        manager.disable().map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+pub fn load_schedule_runs(app: tauri::AppHandle) -> Result<Vec<ScheduleRun>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    crate::scheduler::load_runs(&dir)
 }
 
 fn chrono_now() -> String {

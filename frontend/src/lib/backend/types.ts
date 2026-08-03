@@ -2,9 +2,17 @@ import type {
   BinaryStatus,
   Connection,
   ConnectionDraft,
+  Destination,
+  DestinationDraft,
   DumpJob,
   DumpOptions,
+  DumpProgress,
   EngineId,
+  FreeSpace,
+  Schedule,
+  ScheduleDraft,
+  ScheduleRun,
+  SystemStats,
   TestResult,
 } from "../types";
 
@@ -26,11 +34,13 @@ export interface Backend {
   /** Sélecteur de fichier, pour SQLite. */
   pickFile(): Promise<string | null>;
 
-  /** Lance le dump. `onProgress` reçoit les lignes de log au fil de l'eau. */
+  /** Lance le dump. `onProgress` reçoit les lignes de log au fil de l'eau,
+   *  `onStats` le débit d'écriture mesuré pendant que le fichier grossit. */
   runDump(
     conn: Connection,
     opts: DumpOptions,
     onProgress: (line: string) => void,
+    onStats?: (progress: DumpProgress) => void,
   ): Promise<DumpJob>;
   cancelDump(jobId: string): Promise<void>;
 
@@ -49,4 +59,40 @@ export interface Backend {
   /** Desktop : copie le fichier produit vers le dossier Téléchargements de l'OS
    *  et renvoie le chemin de la copie. Sur web, sans objet. */
   copyToDownloads(outputPath: string): Promise<string>;
+
+  // ── Programmations ─────────────────────────────────────────────────────────
+  // Les échéances sont calculées et déclenchées par le backend : l'UI lit et
+  // écrit, elle ne tient pas d'horloge.
+
+  listSchedules(): Promise<Schedule[]>;
+  saveSchedule(draft: ScheduleDraft, id?: string): Promise<Schedule>;
+  deleteSchedule(id: string): Promise<void>;
+  /** Suspend ou reprend. Reprendre recalcule l'échéance depuis maintenant. */
+  setScheduleEnabled(id: string, enabled: boolean): Promise<Schedule>;
+  /** Lance tout de suite, sans attendre l'échéance. Rend la main aussitôt :
+   *  l'avancement arrive par `onSchedulesChanged`. */
+  runScheduleNow(id: string): Promise<void>;
+  listScheduleRuns(): Promise<ScheduleRun[]>;
+  /** Prévient quand une exécution démarre ou se termine en fond. Renvoie la
+   *  fonction de désabonnement. */
+  onSchedulesChanged(listener: () => void): () => void;
+
+  /** Desktop : DBDump se lance-t-il à l'ouverture de session ? Sans lui, une
+   *  programmation nocturne ne part que si l'app était déjà ouverte. */
+  isAutostartEnabled(): Promise<boolean>;
+  setAutostart(enabled: boolean): Promise<void>;
+
+  // ── Destinations ───────────────────────────────────────────────────────────
+
+  listDestinations(): Promise<Destination[]>;
+  saveDestination(draft: DestinationDraft, id?: string): Promise<Destination>;
+  deleteDestination(id: string): Promise<void>;
+  /** Teste la connexion **et** le droit d'écriture, sur un brouillon non
+   *  enregistré. */
+  testDestination(draft: DestinationDraft, id?: string): Promise<TestResult>;
+  /** Espace libre, quand la destination sait le dire (dossier, SFTP). */
+  destinationSpace(id: string): Promise<FreeSpace | null>;
+
+  /** État de la machine : CPU, mémoire, volumes, dumps en cours. */
+  systemStats(): Promise<SystemStats>;
 }

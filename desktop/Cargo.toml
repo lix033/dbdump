@@ -19,13 +19,15 @@ tauri-build = { version = "2.6.3", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.11.3", features = [] }
+# `tray-icon` : l'app garde une icône dans la barre de menus / zone de
+# notification, seul moyen pour l'ordonnanceur de tourner fenêtre fermée.
+tauri = { version = "2.11.3", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2.7.1"
 tauri-plugin-opener = "2.5.4"
 
 # Exécution des dumps : tokio pour lire stdout/stderr sans bloquer l'UI.
-tokio = { version = "1.53", features = ["process", "io-util", "rt", "macros", "sync"] }
+tokio = { version = "1.53", features = ["process", "io-util", "rt", "macros", "sync", "time", "fs"] }
 # Localisation de pg_dump / mysqldump / … dans le PATH.
 which = "8.0"
 # Chiffrement du fichier de connexions et du coffre de secrets au repos.
@@ -34,9 +36,21 @@ base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
 # Octets aléatoires (nonce GCM, clé maître) : API stable, sans suivre rand_core.
 getrandom = "0.4"
+# Calendrier des programmations : heure locale, arithmétique de dates, passage
+# à l'heure d'été. `clock` pour Local::now(), `serde` pour les échéances stockées.
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
 # Compression des sorties de mysqldump / sqlite3, qui ne savent pas la faire.
 flate2 = "1"
 # Téléchargement + extraction de pg_dump portable au 1er lancement (si absent du
 # système), pour éviter à l'utilisateur d'installer PostgreSQL au préalable.
 ureq = "2"
 tar = "0.4"
+# « Lancer au démarrage » : sans ça, un ordonnanceur interne ne sert que si
+# l'utilisateur pense à ouvrir l'app.
+tauri-plugin-autostart = "2.5.1"
+rust-s3 = { version = "0.37.2", default-features = false, features = ["tokio-rustls-tls"] }
+suppaftp = { version = "10", features = ["rustls-ring"] }
+ssh2 = { version = "0.9.6", features = ["vendored-openssl"] }
+sysinfo = "0.36.1"
+rustls = "0.23.43"
+webpki-roots = "1.0.9"

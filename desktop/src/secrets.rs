@@ -32,6 +32,21 @@ pub fn delete_password(connection_id: &str) -> Result<(), String> {
     backend::delete(connection_id)
 }
 
+/// Secret d'une destination : mot de passe SFTP/FTP, phrase de passe d'une clé
+/// privée, ou clé secrète S3. Préfixé pour ne pas entrer en collision avec les
+/// mots de passe de bases, qui utilisent l'id de connexion.
+pub fn set_destination_secret(destination_id: &str, secret: &str) -> Result<(), String> {
+    backend::set(&format!("dest:{destination_id}"), secret)
+}
+
+pub fn get_destination_secret(destination_id: &str) -> Result<Option<String>, String> {
+    backend::get(&format!("dest:{destination_id}"))
+}
+
+pub fn delete_destination_secret(destination_id: &str) -> Result<(), String> {
+    backend::delete(&format!("dest:{destination_id}"))
+}
+
 /// Clé de chiffrement du fichier de connexions, stockée au même endroit que les
 /// mots de passe. Le fichier `connections.enc` est donc inexploitable sans elle.
 pub fn get_or_create_master_key() -> Result<[u8; 32], String> {

@@ -126,6 +126,9 @@ pub struct Connection {
 #[serde(rename_all = "camelCase")]
 pub struct DumpOptions {
     pub format: DumpFormat,
+    /// Dossier où l'outil écrit. Reste le point de départ même quand la
+    /// sauvegarde part ailleurs : pg_dump & co. écrivent sur un disque, pas
+    /// dans un bucket.
     pub destination_dir: String,
     pub file_name: String,
     pub schema_only: bool,
@@ -133,6 +136,21 @@ pub struct DumpOptions {
     pub clean: bool,
     pub gzip: bool,
     pub exclude_tables: Vec<String>,
+    /// Destinations enregistrées vers lesquelles diffuser le fichier produit.
+    /// Vide = le dump reste simplement dans `destination_dir`.
+    #[serde(default)]
+    pub destination_ids: Vec<String>,
+    /// Garder le fichier dans `destination_dir` après diffusion. À `false`, il
+    /// est supprimé dès qu'au moins une destination a confirmé — c'est ce qui
+    /// permet une sauvegarde réellement « distante seulement ».
+    #[serde(default = "yes")]
+    pub keep_local: bool,
+}
+
+/// `keep_local` vaut vrai par défaut : une option absente (ancienne
+/// configuration, appel du mode démo) ne doit pas faire disparaître un fichier.
+fn yes() -> bool {
+    true
 }
 
 /// La commande à exécuter. `env` et `stdin_input` contiennent les secrets :
@@ -317,6 +335,8 @@ mod tests {
             clean: false,
             gzip: false,
             exclude_tables: vec![],
+            destination_ids: vec![],
+            keep_local: true,
         }
     }
 

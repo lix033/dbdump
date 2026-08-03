@@ -64,7 +64,7 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.29 0.025 158);
   /* Vert forêt sombre : la couleur de marque demandée. */
-  --primary: oklch(0.47 0.1 158);
+  --primary: #186b45;
   --primary-foreground: oklch(0.985 0.02 158);
   --secondary: oklch(0.955 0.014 158);
   --secondary-foreground: oklch(0.35 0.03 158);

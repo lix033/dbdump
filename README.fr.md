@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="brand/logo-512.png" alt="" width="92" height="92">
+</p>
+
 # DBDump
 
 [English](README.md) · **Français**
@@ -34,6 +38,18 @@ n'est envoyée sur Internet, aucun serveur à installer.
   fonctionne hors-ligne. Rien à configurer.
 - Connexions enregistrées (chiffrées), **test de connexion**, et **journal en
   direct** pendant la sauvegarde.
+- **Sauvegardes programmées** : toutes les N heures, chaque jour, les jours de
+  semaine choisis, à date fixe dans le mois, ou une seule fois à une date donnée.
+  DBDump les exécute en fond (icône de barre de menus, lancement au démarrage en
+  option) et rattrape une exécution manquée pendant qu'il était fermé. Rétention
+  facultative : ne garder que les N dernières sauvegardes.
+- **Destinations multiples**, en parallèle : dossier local, disque externe, NAS
+  ou partage réseau, **SFTP**, **FTP/FTPS**, et stockage **compatible S3**
+  (Amazon S3, MinIO, Cloudflare R2). Un dump, plusieurs copies — avec l'option
+  de supprimer le fichier local dès qu'une destination a confirmé.
+- **Surveillance** : espace libre de chaque volume et de chaque destination, CPU
+  et mémoire de la machine et des outils de dump, débit d'écriture et temps
+  restant estimé pendant une sauvegarde.
 - Disponible sur **macOS** (Apple Silicon & Intel), **Windows** et **Linux**.
 - Interface et messages en **anglais et français**.
 
@@ -121,6 +137,15 @@ qui manquent** et comment les installer selon votre système.
   chiffré **AES-256-GCM** (`~/.dbdump/secrets.enc`) ; le fichier des connexions
   (`connections.enc`) est chiffré de la même façon. La clé locale
   (`~/.dbdump/secrets.key`, permissions `0600`) ne quitte jamais la machine.
+
+- **Les secrets des destinations** (mots de passe SFTP/FTP, phrases de passe de
+  clés, clés secrètes S3) vivent dans ce même coffre, jamais dans les fichiers de
+  configuration.
+- **Les clés d'hôte SSH sont vérifiées.** Une destination SFTP dont l'hôte n'est
+  pas déjà dans votre `~/.ssh/known_hosts` est refusée, empreinte affichée :
+  accepter n'importe quelle clé reviendrait à offrir vos sauvegardes à qui sait
+  s'intercaler sur le réseau. Lancez une fois `ssh utilisateur@hôte`, vérifiez
+  l'empreinte, et DBDump se connectera.
 
   > **Compromis assumé.** DBDump n'utilise pas le trousseau système (Keychain,
   > Credential Manager, Secret Service) : sans certificat de signature stable,

@@ -1,13 +1,23 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type {
   BinaryStatus,
   Connection,
   ConnectionDraft,
+  DeliveryResult,
+  Destination,
+  DestinationDraft,
   DumpJob,
   DumpOptions,
+  DumpProgress,
   EngineId,
+  FreeSpace,
+  Schedule,
+  ScheduleDraft,
+  ScheduleRun,
+  SystemStats,
   TestResult,
 } from "../types";
 import type { Backend } from "./types";
@@ -15,13 +25,20 @@ import { currentDictionary, currentLocale } from "@/i18n/current";
 
 /** Le canal ne transporte plus que les logs en direct ; le résultat final est la
  *  valeur de retour de `run_dump` (voir commands.rs). */
-type DumpEvent = { kind: "log"; line: string };
+type DumpEvent =
+  | { kind: "log"; line: string }
+  | ({ kind: "progress" } & DumpProgress);
 
 /** Ce que `run_dump` renvoie quand le dump réussit. */
 interface DumpDone {
   sizeBytes: number;
   outputPath: string;
+  deliveries: DeliveryResult[];
 }
+
+/** Émis par l'ordonnanceur à chaque début et fin d'exécution (voir
+ *  desktop/src/scheduler.rs). */
+const SCHEDULES_CHANGED = "dbdump://schedules-changed";
 
 export class TauriBackend implements Backend {
   readonly isDesktop = true;
@@ -63,6 +80,7 @@ export class TauriBackend implements Backend {
     conn: Connection,
     opts: DumpOptions,
     onProgress: (line: string) => void,
+    onStats?: (progress: DumpProgress) => void,
   ): Promise<DumpJob> {
     const startedAt = new Date().toISOString();
     const log: string[] = [];
@@ -74,6 +92,8 @@ export class TauriBackend implements Backend {
       if (event.kind === "log") {
         log.push(event.line);
         onProgress(event.line);
+      } else {
+        onStats?.(event);
       }
     };
 
@@ -98,7 +118,36 @@ export class TauriBackend implements Backend {
       outputPath: done.outputPath,
       sizeBytes: done.sizeBytes,
       log,
+      deliveries: done.deliveries,
     };
+  }
+
+  listDestinations(): Promise<Destination[]> {
+    return invoke<Destination[]>("load_destinations");
+  }
+
+  saveDestination(draft: DestinationDraft, id?: string): Promise<Destination> {
+    return invoke<Destination>("save_destination", { draft, id: id ?? null });
+  }
+
+  async deleteDestination(id: string): Promise<void> {
+    await invoke("delete_destination", { id });
+  }
+
+  testDestination(draft: DestinationDraft, id?: string): Promise<TestResult> {
+    return invoke<TestResult>("test_destination", {
+      draft,
+      id: id ?? null,
+      lang: currentLocale(),
+    });
+  }
+
+  destinationSpace(id: string): Promise<FreeSpace | null> {
+    return invoke<FreeSpace | null>("destination_space", { id });
+  }
+
+  systemStats(): Promise<SystemStats> {
+    return invoke<SystemStats>("system_stats");
   }
 
   async cancelDump(jobId: string): Promise<void> {
@@ -127,5 +176,55 @@ export class TauriBackend implements Backend {
 
   copyToDownloads(outputPath: string): Promise<string> {
     return invoke<string>("copy_to_downloads", { path: outputPath });
+  }
+
+  // ── Programmations ─────────────────────────────────────────────────────────
+
+  listSchedules(): Promise<Schedule[]> {
+    // `lang` : c'est la seule occasion pour l'ordonnanceur d'apprendre la langue
+    // de l'interface. Ses exécutions de fond n'ont personne à qui la demander.
+    return invoke<Schedule[]>("load_schedules", { lang: currentLocale() });
+  }
+
+  saveSchedule(draft: ScheduleDraft, id?: string): Promise<Schedule> {
+    return invoke<Schedule>("save_schedule", {
+      draft,
+      id: id ?? null,
+      lang: currentLocale(),
+    });
+  }
+
+  async deleteSchedule(id: string): Promise<void> {
+    await invoke("delete_schedule", { id });
+  }
+
+  setScheduleEnabled(id: string, enabled: boolean): Promise<Schedule> {
+    return invoke<Schedule>("set_schedule_enabled", { id, enabled });
+  }
+
+  async runScheduleNow(id: string): Promise<void> {
+    await invoke("run_schedule_now", { id, lang: currentLocale() });
+  }
+
+  listScheduleRuns(): Promise<ScheduleRun[]> {
+    return invoke<ScheduleRun[]>("load_schedule_runs");
+  }
+
+  isAutostartEnabled(): Promise<boolean> {
+    return invoke<boolean>("autostart_enabled");
+  }
+
+  async setAutostart(enabled: boolean): Promise<void> {
+    await invoke("set_autostart", { enabled });
+  }
+
+  onSchedulesChanged(listener: () => void): () => void {
+    // `listen` est asynchrone alors que l'abonnement doit rendre la main tout de
+    // suite : on garde la promesse et on désabonne quand elle est résolue. Un
+    // démontage avant résolution est donc honoré lui aussi.
+    const pending = listen(SCHEDULES_CHANGED, () => listener());
+    return () => {
+      pending.then((unlisten) => unlisten()).catch(() => {});
+    };
   }
 }
